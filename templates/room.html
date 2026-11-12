@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ room.title }} - When2Meet & Where2Meet</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="room-page app-no-scroll">
+
+  <!-- 상단 네비게이션 & 탭 전환 -->
+  <header class="navbar compact-nav">
+    <div class="nav-brand">
+      <a href="/" style="display: flex; align-items: center; gap: 8px;">
+        <div class="brand-icon">🤝</div>
+        <span>우리지금만나</span>
+      </a>
+      <span class="nav-badge">When & Where</span>
+    </div>
+
+    <!-- 상단 탭 전환 -->
+    <div class="room-nav-tabs-inline">
+      <button id="tabBtnWhen" class="tab-btn active">
+        📅 When to Meet (일정 조율)
+      </button>
+      <button id="tabBtnWhere" class="tab-btn">
+        📍 Where to Meet (장소 찾기)
+        <span class="tab-preview-badge">UI 미리보기</span>
+      </button>
+    </div>
+
+    <!-- 공유 및 빠른 이동 영역 -->
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button id="btnShareModal" class="btn btn-primary btn-sm" style="background: #2563eb;">
+        🔗 모임 링크 공유
+      </button>
+      <a href="/" class="btn btn-outline btn-sm">
+        + 새 방
+      </a>
+    </div>
+  </header>
+
+  <!-- 모임 메타 정보 한 줄 서브헤더 -->
+  <div class="room-compact-bar">
+    <div class="room-title-chunk">
+      <span class="room-title-text">{{ room.title }}</span>
+      <span class="room-id-badge">/meet/{{ room.id }}</span>
+    </div>
+    <div class="room-meta-chunk">
+      <span>📅 {{ room.dates[0] }} ~ {{ room.dates[-1] }} (총 {{ room.dates|length }}일)</span>
+      <span>⏰ {{ room.time_start }} ~ {{ room.time_end }}</span>
+      <span id="headerParticipantCount" class="meta-participants-badge">👥 참여자: 0명</span>
+    </div>
+  </div>
+
+  <!-- 공유 링크 안내 모달/팝업 -->
+  <div id="shareModal" class="card share-modal-popup" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <strong style="color: #1e3a8a; font-size: 0.95rem;">🌐 다른 사람과 공유할 링크</strong>
+      <button id="btnCloseShareModal" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #64748b;">✕</button>
+    </div>
+    
+    <div style="margin-bottom: 10px;">
+      <label style="font-size: 0.78rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">
+        📱 다른 컴퓨터 / 스마트폰 접속용 (추천)
+      </label>
+      <div style="display: flex; gap: 6px;">
+        <input type="text" id="shareLanUrlInput" class="form-control" readonly style="font-size: 0.8rem; padding: 5px 8px; background: #f8fafc;">
+        <button id="btnCopyLanUrl" class="btn btn-secondary btn-xs" style="white-space: nowrap;">복사</button>
+      </div>
+      <small style="font-size: 0.7rem; color: #64748b;">* 같은 와이파이 또는 네트워크에 연결된 기기에서 바로 접속됩니다.</small>
+    </div>
+
+    <div>
+      <label style="font-size: 0.78rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">
+        💻 내 컴퓨터 전용 (localhost)
+      </label>
+      <div style="display: flex; gap: 6px;">
+        <input type="text" id="shareLocalUrlInput" class="form-control" readonly style="font-size: 0.8rem; padding: 5px 8px; background: #f8fafc;">
+        <button id="btnCopyLocalUrl" class="btn btn-secondary btn-xs" style="white-space: nowrap;">복사</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 전체 한 화면 작업 공간 (No-Scroll Viewport) -->
+  <main class="room-main-viewport">
+
+    <!-- 1. WHEN TO MEET 탭 본문 -->
+    <div id="whenTabContent" class="when-tab-wrapper">
+      
+      <!-- TOP 3 최적 시간대 추천 배너 (컴팩트 슬림 스트립) -->
+      <section class="top-recommendation-bar compact-rec-bar" id="topRecSection" style="display: none;">
+        <div class="top-rec-header-slim">
+          <span class="top-rec-title-mini">✨ AI 최적 추천 TOP 3</span>
+        </div>
+        <div class="rec-cards-grid-slim" id="recCardsContainer">
+          <!-- JS 렌더링 -->
+        </div>
+      </section>
+
+      <!-- 좌우 2열 메인 시간표 영역 -->
+      <div class="when-grid-layout">
+        
+        <!-- 좌측 패널: 내 시간표 패널 -->
+        <div class="card schedule-panel-card left-panel">
+          
+          <!-- 패널 헤더: 타이틀 + 모드 툴바 -->
+          <div class="panel-header compact-header">
+            <h2 class="panel-title-compact">
+              <span>✍️ 내 가능 시간 입력</span>
+            </h2>
+            <!-- 드래그 도구 툴바 -->
+            <div class="drag-toolbar-compact">
+              <div class="mode-toggle-group">
+                <button type="button" id="modeAddBtn" class="mode-btn-compact active">🟩 가능</button>
+                <button type="button" id="modeRemoveBtn" class="mode-btn-compact">⬜ 지우기</button>
+              </div>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" id="btnSelectAll" class="btn btn-secondary btn-xs">전체</button>
+                <button type="button" id="btnClearAll" class="btn btn-secondary btn-xs">해제</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 닉네임 입력 바 -->
+          <div class="user-name-bar">
+            <span class="user-name-label">이름:</span>
+            <input 
+              type="text" 
+              id="userNameInput" 
+              class="form-control user-name-input" 
+              placeholder="내 이름 (닉네임) 입력" 
+              required
+            >
+            <button type="button" id="btnLoadUser" class="btn btn-secondary btn-xs" style="white-space: nowrap;">
+              불러오기
+            </button>
+          </div>
+
+          <!-- 내 드래그 시간표 테이블 (자체 스크롤 + Sticky 헤더) -->
+          <div class="schedule-container" id="myScheduleWrapper">
+            <table class="schedule-table" id="myScheduleTable">
+              <!-- JS 동적 렌더링 -->
+            </table>
+          </div>
+
+          <!-- 저장 버튼 -->
+          <div class="schedule-panel-footer">
+            <button type="button" id="btnSaveSchedule" class="btn btn-primary btn-block-compact">
+              💾 내 일정 저장하기
+            </button>
+          </div>
+        </div>
+
+        <!-- 우측 패널: 모임 종합 시간표 패널 -->
+        <div class="card schedule-panel-card right-panel">
+          
+          <!-- 패널 헤더: 타이틀 + 참여자 수 + 히트맵 범례 -->
+          <div class="panel-header compact-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h2 class="panel-title-compact">
+                <span>👥 모임 종합 시간표</span>
+              </h2>
+              <span id="groupParticipantBadge" class="nav-badge-compact">0명 참여</span>
+            </div>
+            
+            <!-- 히트맵 범례 (컴팩트) -->
+            <div class="heat-legend-compact">
+              <span>적음</span>
+              <div class="heat-legend-bar">
+                <div class="heat-dot" style="background: #f3f4f6; border: 1px solid #e5e7eb;"></div>
+                <div class="heat-dot" style="background: #bbf7d0;"></div>
+                <div class="heat-dot" style="background: #86efac;"></div>
+                <div class="heat-dot" style="background: #4ade80;"></div>
+                <div class="heat-dot" style="background: #22c55e;"></div>
+                <div class="heat-dot" style="background: #15803d;"></div>
+              </div>
+              <span>많음</span>
+            </div>
+          </div>
+
+          <!-- 종합 시간표 테이블 (자체 스크롤 + 동기화 스크롤) -->
+          <div class="schedule-container" id="groupScheduleTableContainer">
+            <table class="schedule-table" id="groupScheduleTable">
+              <!-- JS 동적 렌더링 -->
+            </table>
+          </div>
+
+          <!-- 하단 정보 영역: 호버 실시간 안내 + VIP 및 참여자 명단 -->
+          <div class="group-panel-footer">
+            
+            <!-- 마우스 호버 실시간 상세 안내 바 -->
+            <div class="hover-info-strip" id="hoverInfoBox">
+              <span class="hover-title-compact" id="hoverTimeTitle">시간표 위에 마우스를 올려보세요</span>
+              <span class="hover-sep">|</span>
+              <span id="hoverAvailRow" class="hover-stat-item">
+                <span style="color: var(--text-muted);">가능: </span>
+                <span id="hoverAvailText" class="hover-avail-list">-</span>
+              </span>
+              <span class="hover-sep">|</span>
+              <span id="hoverUnavailRow" class="hover-stat-item">
+                <span style="color: var(--text-muted);">불가: </span>
+                <span id="hoverUnavailText" class="hover-unavail-list">-</span>
+              </span>
+            </div>
+
+            <!-- 필수 참석자(VIP) 선택 및 참여자 명단 인라인 통합 바 -->
+            <div class="participants-control-strip">
+              <div class="vip-control-section">
+                <span class="vip-strip-label">⭐ VIP 지정:</span>
+                <span id="requiredCountBadge" class="vip-count-tag" style="display: none;">0명 지정</span>
+                <div id="requiredParticipantsList" class="vip-chips-scroll">
+                  <span style="color: #b45309; font-size: 0.75rem; opacity: 0.8;">참여자 등록 대기 중</span>
+                </div>
+              </div>
+
+              <div class="members-control-section">
+                <span class="members-strip-label">👥 명단:</span>
+                <div class="participant-chips-compact" id="participantChipsList">
+                  <span style="color: var(--text-muted); font-size: 0.75rem;">등록 대기 중</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 2. WHERE TO MEET 탭 본문 (UI 프리뷰) -->
+    <div id="whereTabContent" class="where-tab-wrapper">
+      <div class="where-banner-compact">
+        <div>
+          <div class="where-banner-title">
+            <span>📍 Where to Meet (최적 중간 장소 추천)</span>
+            <span class="tab-preview-badge">UI 미리보기</span>
+          </div>
+          <div class="where-banner-sub">
+            시간이 정해졌다면, 이제 각자의 출발지와 모임 목적을 고려해 가장 공평한 중간 역과 장소를 찾아드립니다.
+          </div>
+        </div>
+        <div>
+          <button type="button" class="btn btn-primary btn-sm" id="btnRunWherePreview" style="background: #3b82f6;">
+            ⚡ 중간 지점 계산 시뮬레이션
+          </button>
+        </div>
+      </div>
+
+      <div class="where-grid-layout">
+        <!-- 좌측: 설정 카드 -->
+        <div class="card" style="margin-bottom: 0; padding: 14px;">
+          <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">
+            1. 모임 목적 선택
+          </h3>
+          <div class="purpose-grid">
+            <div class="purpose-card selected" data-purpose="study">
+              <div class="purpose-icon">📚</div>
+              <div class="purpose-name">스터디/회의</div>
+              <div class="purpose-desc">조용한 세미나룸, 스터디카페</div>
+            </div>
+            <div class="purpose-card" data-purpose="cafe">
+              <div class="purpose-icon">☕</div>
+              <div class="purpose-name">카페/카공</div>
+              <div class="purpose-desc">콘센트 많고 넓은 대화형 카페</div>
+            </div>
+            <div class="purpose-card" data-purpose="dinner">
+              <div class="purpose-icon">🍽️</div>
+              <div class="purpose-name">식사/회식</div>
+              <div class="purpose-desc">예약 가능 맛집, 단체석 식당</div>
+            </div>
+            <div class="purpose-card" data-purpose="drink">
+              <div class="purpose-icon">🍻</div>
+              <div class="purpose-name">뒤풀이/주점</div>
+              <div class="purpose-desc">분위기 좋은 주점, 펍</div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 0.95rem; font-weight: 700; margin-top: 14px; margin-bottom: 8px;">
+            2. 팀원별 출발지 설정
+          </h3>
+          <div id="whereOriginInputsList">
+            <!-- JS 동적 렌더링 -->
+          </div>
+
+          <div style="margin-top: 12px;">
+            <label class="form-label" style="font-size: 0.8rem; margin-bottom: 4px;">우선 고려 옵션</label>
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: #4b5563;">
+              <label style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" checked disabled>
+                <span>대중교통 이동시간 차이 최소화 (공평성 우선)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" checked disabled>
+                <span>환승 횟수 2회 이내 주요 환승역 우선</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 우측: 결과 프리뷰 카드 -->
+        <div class="card" style="margin-bottom: 0; padding: 14px;">
+          <div class="panel-header compact-header">
+            <h3 class="panel-title-compact">
+              <span>🎯 추천 결과 미리보기</span>
+            </h3>
+            <span style="font-size: 0.75rem; color: #3b82f6; font-weight: 600;">
+              * 대중교통 API 연동 예정
+            </span>
+          </div>
+
+          <!-- 가상 지도 영역 -->
+          <div class="mockup-map-area" style="height: 180px;">
+            <div class="mockup-map-badge">
+              <span>🗺️ 대중교통 경로 시뮬레이션 지도 영역</span>
+            </div>
+            <div class="map-center-pin">
+              <div class="center-pin-bubble">
+                📍 최적 중간 지점: 사당역 (2호선/4호선)
+              </div>
+              <div style="font-size: 1.5rem;">📍</div>
+            </div>
+          </div>
+
+          <!-- 대중교통 이동시간 공평성 차트 -->
+          <div class="transit-fairness-box" style="margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; font-size: 0.82rem; color: #111827;">
+                ⚖️ 참여자별 대중교통 소요 시간 비교 (사당역 기준)
+              </span>
+              <span style="font-size: 0.72rem; color: #059669; font-weight: 700; background: #dcfce7; padding: 1px 6px; border-radius: 8px;">
+                편차 8분 이내
+              </span>
+            </div>
+            <div id="whereTransitChart">
+              <!-- JS 동적 바 -->
+            </div>
+          </div>
+
+          <!-- 추천 역 인근 목적별 추천 장소 리스트 -->
+          <div style="margin-top: 10px;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: #111827; margin-bottom: 6px;">
+              ☕ 사당역 인근 목적별 추천 장소 TOP 2
+            </div>
+            <div class="place-recommend-list" id="wherePlaceList">
+              <!-- JS 동적 생성 -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <!-- 방 ID 전역 주입 -->
+  <script>
+    const ROOM_ID = "{{ room.id }}";
+    const SERVER_LOCAL_IP = "{{ local_ip }}";
+  </script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

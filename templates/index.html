@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>When2Meet & Where2Meet - 약속 시간 및 장소 조율</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="index-page">
+
+  <!-- 상단 네비게이션 헤더 -->
+  <header class="navbar compact-nav">
+    <div class="nav-brand">
+      <div class="brand-icon">🤝</div>
+      <span>우리지금만나</span>
+      <span class="nav-badge">When & Where</span>
+    </div>
+    <div class="network-share-pill">
+      🌐 네트워크 공유 주소: <strong style="color: var(--primary-dark);">http://{{ local_ip }}:8000</strong>
+    </div>
+  </header>
+
+  <!-- 메인 한 화면 2열 레이아웃 -->
+  <main class="index-main-wrap">
+    <div class="create-room-split-card">
+      <form id="createRoomForm" class="create-room-form-grid">
+        
+        <!-- 좌측 컬럼: 모임 정보, 시간대(00:00~24:00), 생성 버튼, 최근 참여 방 -->
+        <div class="index-left-col">
+          <div class="index-hero-mini">
+            <h1 class="index-main-title">새로운 모임 방 만들기</h1>
+            <p class="index-main-desc">약속 시간 조율과 중간 장소 추천을 한 화면에서!</p>
+          </div>
+
+          <div class="form-group compact-group">
+            <label class="form-label" for="roomTitle">모임 제목</label>
+            <input 
+              type="text" 
+              id="roomTitle" 
+              class="form-control" 
+              placeholder="예: 캡스톤 디자인 회의, 동아리 뒤풀이" 
+              required 
+              autocomplete="off"
+            >
+          </div>
+
+          <!-- 직관적인 URL 설정 (선택 사항) -->
+          <div class="form-group compact-group">
+            <label class="form-label" for="customIdInput">
+              맞춤 링크 주소 <small style="font-weight: normal; color: var(--text-muted);">(선택 사항)</small>
+            </label>
+            <div class="custom-url-field">
+              <span class="url-prefix">/meet/</span>
+              <input 
+                type="text" 
+                id="customIdInput" 
+                class="form-control url-input" 
+                placeholder="예: capstone-team (미입력 시 자동 생성)" 
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
+          <!-- 가능 시간대 범위 (00:00 ~ 24:00 전 범위 지원) -->
+          <div class="form-group compact-group">
+            <label class="form-label">가능 시간대 범위 (00:00 ~ 24:00 전체 지원)</label>
+            <div class="time-range-row">
+              <div style="flex: 1;">
+                <select id="timeStart" class="form-control"></select>
+              </div>
+              <span class="range-separator">~</span>
+              <div style="flex: 1;">
+                <select id="timeEnd" class="form-control"></select>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary create-room-submit-btn">
+            모임 방 생성하고 링크 받기 🚀
+          </button>
+
+          <!-- 최근 참여한 모임 방 (컴팩트 인라인) -->
+          <div id="recentRoomsSection" class="recent-rooms-box" style="display: none;">
+            <div class="recent-header">
+              <span>🕒 최근 참여한 모임 방</span>
+            </div>
+            <div id="recentRoomsList" class="recent-rooms-chips"></div>
+          </div>
+        </div>
+
+        <!-- 우측 컬럼: 후보 날짜 선택 (14일치 캘린더 그리드) -->
+        <div class="index-right-col">
+          <div class="dates-panel-header">
+            <label class="form-label" style="margin-bottom: 0;">후보 날짜 선택 (클릭하여 선택)</label>
+            <span class="selected-dates-pill">
+              선택된 날짜: <strong id="selectedDatesCount" style="color: var(--primary);">0</strong>개
+            </span>
+          </div>
+
+          <!-- 날짜 빠른 프리셋 버튼들 -->
+          <div class="date-presets-row">
+            <button type="button" class="btn btn-secondary btn-xs" id="presetUpcoming3">오늘부터 3일</button>
+            <button type="button" class="btn btn-secondary btn-xs" id="presetUpcomingWeekend">이번 주말</button>
+            <button type="button" class="btn btn-secondary btn-xs" id="presetNextWeek">다음주 평일</button>
+            <button type="button" class="btn btn-secondary btn-xs" id="presetClearDates">전체 해제</button>
+          </div>
+
+          <!-- 14일 달력 그리드 -->
+          <div id="datePickerGrid" class="dates-selector-grid">
+            <!-- JS 동적 생성 -->
+          </div>
+
+          <div class="date-selection-tip">
+            💡 여러 날짜를 클릭하여 추가하거나 제외할 수 있습니다.
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </main>
+
+  <div id="toast" class="toast-notice"></div>
+
+  <script>
+    const SERVER_LOCAL_IP = "{{ local_ip }}";
+    const selectedDates = new Set();
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+    function formatDate(d) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${date}`;
+    }
+
+    function initCalendar() {
+      const grid = document.getElementById('datePickerGrid');
+      grid.innerHTML = '';
+      const today = new Date();
+
+      for (let i = 0; i < 14; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() + i);
+        const dateStr = formatDate(d);
+        const dayOfWeek = dayNames[d.getDay()];
+
+        const btn = document.createElement('div');
+        btn.className = 'date-pick-btn';
+        btn.dataset.date = dateStr;
+        btn.innerHTML = `
+          <span class="day-name">${dayOfWeek}</span>
+          <span>${d.getMonth() + 1}/${d.getDate()}</span>
+        `;
+
+        btn.addEventListener('click', () => {
+          if (selectedDates.has(dateStr)) {
+            selectedDates.delete(dateStr);
+            btn.classList.remove('selected');
+          } else {
+            selectedDates.add(dateStr);
+            btn.classList.add('selected');
+          }
+          updateSelectedCount();
+        });
+
+        grid.appendChild(btn);
+      }
+
+      selectPresetUpcoming(3);
+    }
+
+    function updateSelectedCount() {
+      document.getElementById('selectedDatesCount').textContent = selectedDates.size;
+    }
+
+    function selectPresetUpcoming(days) {
+      selectedDates.clear();
+      const today = new Date();
+      for (let i = 0; i < days; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() + i);
+        selectedDates.add(formatDate(d));
+      }
+      syncCalendarUI();
+    }
+
+    function selectPresetWeekend() {
+      selectedDates.clear();
+      const today = new Date();
+      for (let i = 0; i < 14; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() + i);
+        if (d.getDay() === 0 || d.getDay() === 6) {
+          selectedDates.add(formatDate(d));
+          if (selectedDates.size >= 2) break;
+        }
+      }
+      syncCalendarUI();
+    }
+
+    function selectPresetNextWeek() {
+      selectedDates.clear();
+      const today = new Date();
+      const day = today.getDay();
+      const diff = (day === 0 ? 1 : 8 - day);
+      const nextMon = new Date(today);
+      nextMon.setDate(today.getDate() + diff);
+
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(nextMon);
+        d.setDate(nextMon.getDate() + i);
+        selectedDates.add(formatDate(d));
+      }
+      syncCalendarUI();
+    }
+
+    function syncCalendarUI() {
+      document.querySelectorAll('.date-pick-btn').forEach(btn => {
+        if (selectedDates.has(btn.dataset.date)) {
+          btn.classList.add('selected');
+        } else {
+          btn.classList.remove('selected');
+        }
+      });
+      updateSelectedCount();
+    }
+
+    // 00:00 ~ 24:00 전체 범위 시간대 셀렉트 박스 초기화
+    function initTimeSelects() {
+      const startSel = document.getElementById('timeStart');
+      const endSel = document.getElementById('timeEnd');
+      startSel.innerHTML = '';
+      endSel.innerHTML = '';
+
+      // 00:00부터 23:00까지
+      for (let h = 0; h <= 23; h++) {
+        const hh = String(h).padStart(2, '0') + ':00';
+        const opt = new Option(hh, hh);
+        if (h === 9) opt.selected = true; // 기본값 09:00
+        startSel.add(opt);
+      }
+
+      // 01:00부터 24:00까지
+      for (let h = 1; h <= 24; h++) {
+        const hh = String(h).padStart(2, '0') + ':00';
+        const opt = new Option(hh, hh);
+        if (h === 24) opt.selected = true; // 기본값 24:00
+        endSel.add(opt);
+      }
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // 폼 제출
+    document.getElementById('createRoomForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('roomTitle').value.trim();
+      const customId = document.getElementById('customIdInput').value.trim();
+      const dates = Array.from(selectedDates).sort();
+      const timeStart = document.getElementById('timeStart').value;
+      const timeEnd = document.getElementById('timeEnd').value;
+
+      if (dates.length === 0) {
+        showToast('최소 하루 이상의 날짜를 선택해주세요.');
+        return;
+      }
+
+      const startH = parseInt(timeStart.split(':')[0]);
+      const endH = parseInt(timeEnd.split(':')[0]);
+      if (startH >= endH) {
+        showToast('종료 시간은 시작 시간보다 늦어야 합니다.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            dates: dates,
+            time_start: timeStart,
+            time_end: timeEnd,
+            custom_id: customId || null
+          })
+        });
+
+        const data = await res.json();
+        if (data.success && data.room) {
+          saveRecentRoom(data.room.id, data.room.title);
+          window.location.href = `/meet/${data.room.id}`;
+        } else {
+          showToast('방 생성에 실패했습니다: ' + (data.detail || ''));
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('서버 오류가 발생했습니다.');
+      }
+    });
+
+    function saveRecentRoom(id, title) {
+      let recent = JSON.parse(localStorage.getItem('recent_rooms') || '[]');
+      recent = recent.filter(r => r.id !== id);
+      recent.unshift({ id, title, time: new Date().toLocaleDateString() });
+      if (recent.length > 5) recent = recent.slice(0, 5);
+      localStorage.setItem('recent_rooms', JSON.stringify(recent));
+    }
+
+    function loadRecentRooms() {
+      const recent = JSON.parse(localStorage.getItem('recent_rooms') || '[]');
+      if (recent.length > 0) {
+        const sec = document.getElementById('recentRoomsSection');
+        const list = document.getElementById('recentRoomsList');
+        sec.style.display = 'block';
+        list.innerHTML = recent.map(r => `
+          <a href="/meet/${r.id}" class="recent-room-chip">
+            <span class="chip-title">${r.title}</span>
+            <span class="chip-date">${r.time} &rarr;</span>
+          </a>
+        `).join('');
+      }
+    }
+
+    document.getElementById('presetUpcoming3').onclick = () => selectPresetUpcoming(3);
+    document.getElementById('presetUpcomingWeekend').onclick = selectPresetWeekend;
+    document.getElementById('presetNextWeek').onclick = selectPresetNextWeek;
+    document.getElementById('presetClearDates').onclick = () => {
+      selectedDates.clear();
+      syncCalendarUI();
+    };
+
+    initCalendar();
+    initTimeSelects();
+    loadRecentRooms();
+  </script>
+</body>
+</html>
