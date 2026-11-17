@@ -1738,14 +1738,18 @@ body.room-page {
 }
 
 .where-tab-wrapper {
+  display: none;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
   flex-direction: column;
   gap: 12px;
   height: 100%;
   padding-bottom: 16px;
+}
+
+.where-tab-wrapper.active {
+  display: flex;
 }
 
 .where-banner-compact {
@@ -1757,6 +1761,326 @@ body.room-page {
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+}
+
+.where-main-card {
+  min-height: 0;
+}
+
+.tab-active-badge {
+  font-size: 0.68rem;
+  background: #22c55e;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.where-warnings-box {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: #92400e;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.where-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.where-empty-notice {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  line-height: 1.5;
+}
+
+.where-candidates-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.where-candidate-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.where-candidate-card:hover {
+  border-color: var(--primary);
+  background: #f8fafc;
+}
+
+.where-candidate-card.active {
+  border-color: var(--primary);
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.cand-rank-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: white;
+}
+
+.rank-badge-1 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.rank-badge-2 {
+  background: #64748b;
+}
+
+.rank-badge-3 {
+  background: #b45309;
+}
+
+.rank-badge-other {
+  background: #94a3b8;
+}
+
+.cand-station-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #111827;
+}
+
+.cand-max-time {
+  font-size: 0.8rem;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.cand-metrics-row {
+  display: flex;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.kakao-map-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.map-fallback-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(241, 245, 249, 0.95);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.transit-diff-badge {
+  font-size: 0.72rem;
+  color: #059669;
+  font-weight: 700;
+  background: #dcfce7;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.transit-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+}
+
+.transit-user-name {
+  width: 60px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transit-bar-track {
+  flex: 1;
+  height: 18px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.transit-bar-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  transition: width 0.3s ease;
+}
+
+.transit-bar-fill.bottleneck {
+  background: #ef4444;
+}
+
+.transit-bar-label {
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.transit-bottleneck-tag {
+  font-size: 0.65rem;
+  color: #dc2626;
+  background: #fee2e2;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.place-recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.place-card-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  background: #f8fafc;
+}
+
+.place-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.place-rank-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #334155;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.place-name {
+  font-size: 0.88rem;
+  color: #0f172a;
+}
+
+.place-distance {
+  font-size: 0.72rem;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.place-address {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.place-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.place-category {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.place-link-btn {
+  font-size: 0.72rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.place-link-btn:hover {
+  text-decoration: underline;
+}
+
+/* 지도 커스텀 오버레이 */
+.map-user-overlay {
+  background: #1e40af;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.map-station-overlay {
+  background: white;
+  border: 2px solid #2563eb;
+  color: #1e3a8a;
+  padding: 3px 8px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-station-overlay.top1 {
+  background: #fef3c7;
+  border-color: #d97706;
+  color: #92400e;
+  transform: scale(1.1);
+  z-index: 10;
+}
+
+.map-station-overlay.selected {
+  outline: 3px solid #2563eb;
+}
+
+.map-station-overlay .station-rank {
+  font-size: 0.68rem;
+  background: #2563eb;
+  color: white;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.map-station-overlay.top1 .station-rank {
+  background: #d97706;
 }
 
 /* 4. 반응형 모바일 (화면 너비 900px 미만 대응) */

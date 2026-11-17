@@ -74,7 +74,8 @@ def create_room(
         "time_start": time_start,
         "time_end": time_end,
         "time_slots": time_slots,
-        "participants": {},  # name -> {name, is_required, available_slots: [...], origin, updated_at}
+        "participants": {},  # name -> {name, is_required, available_slots: [...], origin, lat, lng, updated_at}
+        "where_result": None,
         "created_at": datetime.now().isoformat()
     }
     
@@ -102,23 +103,60 @@ def save_participant_schedule(
     if not name:
         return None
         
-    # 기존 필수 참석자 여부 보존 (따로 전달되지 않은 경우)
+    # 기존 필수 참석자 및 출발지 좌표 보존
     existing_p = room["participants"].get(name, {})
     if is_required is None:
         required_flag = existing_p.get("is_required", False)
     else:
         required_flag = bool(is_required)
         
-    room["participants"][name] = {
+    new_origin = origin.strip() if origin.strip() else existing_p.get("origin", "")
+    lat = existing_p.get("lat")
+    lng = existing_p.get("lng")
+    if new_origin != existing_p.get("origin", ""):
+        lat = None
+        lng = None
+
+    p_entry = {
         "name": name,
         "is_required": required_flag,
         "available_slots": available_slots,
-        "origin": origin.strip() if origin.strip() else existing_p.get("origin", ""),
+        "origin": new_origin,
         "updated_at": datetime.now().isoformat()
     }
-    
+    if lat is not None and lng is not None:
+        p_entry["lat"] = lat
+        p_entry["lng"] = lng
+
+    room["participants"][name] = p_entry
     _save_all_rooms(rooms)
     return room
+
+def save_participant_origin(room_id: str, name: str, origin: str) -> Optional[Dict[str, Any]]:
+    """
+    참여자의 출발지(origin)를 저장. 출발지가 변경되면 기존 lat, lng 좌표 캐시를 초기화.
+    """
+    rooms = _load_all_rooms()
+    if room_id not in rooms:
+        return None
+    room = rooms[room_id]
+    if name in room.get("participants", {}):
+        p = room["participants"][name]
+        if p.get("origin") != origin.strip():
+            p["origin"] = origin.strip()
+            p.pop("lat", None)
+            p.pop("lng", None)
+            _save_all_rooms(rooms)
+    return room
+
+def save_where_result(room_id: str, result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Where to Meet 계산 결과를 해당 모임 방에 영구 저장"""
+    rooms = _load_all_rooms()
+    if room_id not in rooms:
+        return None
+    rooms[room_id]["where_result"] = result
+    _save_all_rooms(rooms)
+    return rooms[room_id]
 
 def update_required_participants(room_id: str, required_names: List[str]) -> Optional[Dict[str, Any]]:
     """
@@ -176,7 +214,6 @@ def calculate_group_summary(room: Dict[str, Any]) -> Dict[str, Any]:
             }
             
     # 연속 블록 및 TOP 3 추천 계산
-    # 모임 단위는 최소 1시간(2슬롯) 또는 연속 슬롯으로 묶어 점수 계산
     top_recommendations = _find_top_recommendations(dates, time_slots, slot_stats, total_participants, total_required)
     
     return {
@@ -192,18 +229,14 @@ def _find_top_recommendations(dates, time_slots, slot_stats, total_participants,
     
     candidate_blocks = []
     
-    # 각 날짜별로 연속 구간 탐색
     for d in dates:
-        # 슬롯 연속성 검사
         i = 0
         while i < len(time_slots):
-            # 연속된 블록들을 1시간(2슬롯), 1.5시간(3슬롯), 2시간(4슬롯) 단위 등으로 탐색
-            for block_len in [4, 3, 2, 1]:  # 최대 2시간부터 30분까지
+            for block_len in [4, 3, 2, 1]:
                 if i + block_len <= len(time_slots):
                     sub_slots = time_slots[i:i+block_len]
                     sub_keys = [f"{d}_{t}" for t in sub_slots]
                     
-                    # 블록 내 공통 가능 인원
                     common_available = None
                     all_required_ok = True
                     min_count = 999999
@@ -223,16 +256,11 @@ def _find_top_recommendations(dates, time_slots, slot_stats, total_participants,
                     count = len(common_available) if common_available is not None else 0
                     if count > 0:
                         start_t = sub_slots[0]
-                        # 끝 시간 계산 (마지막 슬롯 + 30분)
                         last_t = sub_slots[-1]
                         lh, lm = map(int, last_t.split(":"))
                         end_minutes = lh * 60 + lm + 30
                         end_t = f"{end_minutes // 60:02d}:{end_minutes % 60:02d}"
                         
-                        # 점수 부여:
-                        # 필수 참석자 모두 만족 시 +1000점
-                        # 참여 인원수 * 100점
-                        # 연속 시간 길이 * 10점
                         score = 0
                         if total_required > 0 and all_required_ok:
                             score += 1000
@@ -254,12 +282,10 @@ def _find_top_recommendations(dates, time_slots, slot_stats, total_participants,
                         })
             i += 1
             
-    # 점수 높은 순으로 정렬 후 중복/겹침이 적은 상위 3개 추천
     candidate_blocks.sort(key=lambda x: (x["score"], x["available_count"], x["duration_minutes"]), reverse=True)
     
     top3 = []
     for cand in candidate_blocks:
-        # 이미 선택된 것과 같은 날짜/시간대 중복 방지 (완전히 포함되는 경우 필터)
         is_dup = False
         for chosen in top3:
             if cand["date"] == chosen["date"] and (
@@ -273,7 +299,6 @@ def _find_top_recommendations(dates, time_slots, slot_stats, total_participants,
             if len(top3) == 3:
                 break
                 
-    # 만약 중복 배제 후 3개가 안 채워졌다면 후보에서 순서대로 채움
     if len(top3) < 3:
         for cand in candidate_blocks:
             if cand not in top3:
