@@ -15,18 +15,28 @@
         <div class="brand-icon">🤝</div>
         <span>우리지금만나</span>
       </a>
-      <span class="nav-badge">When & Where</span>
+      <span class="nav-badge" id="currentModeBadge">📅 시간표 조율</span>
     </div>
 
-    <!-- 상단 탭 전환 -->
-    <div class="room-nav-tabs-inline">
-      <button id="tabBtnWhen" class="tab-btn active">
-        📅 When to Meet (일정 조율)
-      </button>
-      <button id="tabBtnWhere" class="tab-btn">
-        📍 Where to Meet (장소 찾기)
-        <span class="tab-preview-badge">UI 미리보기</span>
-      </button>
+    <!-- 상단 기능 전환 스위치 (When to Meet <-> Where to Meet) -->
+    <div class="mode-switch-wrapper">
+      <div class="mode-switch-container" id="modeSwitchContainer">
+        <div class="mode-switch-slider" id="modeSwitchSlider"></div>
+        <button type="button" id="tabBtnWhen" class="mode-switch-btn active" data-mode="when" aria-pressed="true">
+          <span class="switch-icon">📅</span>
+          <span class="switch-text-group">
+            <span class="switch-main-label">When to Meet</span>
+            <span class="switch-sub-label">시간표 조율</span>
+          </span>
+        </button>
+        <button type="button" id="tabBtnWhere" class="mode-switch-btn" data-mode="where" aria-pressed="false">
+          <span class="switch-icon">📍</span>
+          <span class="switch-text-group">
+            <span class="switch-main-label">Where to Meet</span>
+            <span class="switch-sub-label">장소 찾기</span>
+          </span>
+        </button>
+      </div>
     </div>
 
     <!-- 공유 및 빠른 이동 영역 -->
@@ -85,8 +95,8 @@
   <!-- 전체 한 화면 작업 공간 (No-Scroll Viewport) -->
   <main class="room-main-viewport">
 
-    <!-- 1. WHEN TO MEET 탭 본문 -->
-    <div id="whenTabContent" class="when-tab-wrapper">
+    <!-- 1. WHEN TO MEET 뷰 (일정 조율 전용 - 가리는 창 없이 한눈에 들어오는 시간표) -->
+    <div id="whenTabContent" class="mode-content-view when-tab-wrapper active">
       
       <!-- TOP 3 최적 시간대 추천 배너 (컴팩트 슬림 스트립) -->
       <section class="top-recommendation-bar compact-rec-bar" id="topRecSection" style="display: none;">
@@ -228,8 +238,8 @@
       </div>
     </div>
 
-    <!-- 2. WHERE TO MEET 탭 본문 (UI 프리뷰) -->
-    <div id="whereTabContent" class="where-tab-wrapper">
+    <!-- 2. WHERE TO MEET 뷰 (장소 찾기 전용 - 완전 분리된 독립 화면) -->
+    <div id="whereTabContent" class="mode-content-view where-tab-wrapper" style="display: none;">
       <div class="where-banner-compact">
         <div>
           <div class="where-banner-title">
