@@ -55,27 +55,93 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// 탭 전환 설정
+// 기능 전환 토글 스위치 (When to Meet <-> Where to Meet) 설정
 function setupTabs() {
+  const switchContainer = document.getElementById('modeSwitchContainer');
   const tabWhen = document.getElementById('tabBtnWhen');
   const tabWhere = document.getElementById('tabBtnWhere');
   const contentWhen = document.getElementById('whenTabContent');
   const contentWhere = document.getElementById('whereTabContent');
+  const modeBadge = document.getElementById('currentModeBadge');
 
-  tabWhen.addEventListener('click', () => {
-    tabWhen.classList.add('active');
-    tabWhere.classList.remove('active');
-    contentWhen.style.display = 'block';
-    contentWhere.classList.remove('active');
+  if (!tabWhen || !tabWhere || !contentWhen || !contentWhere) return;
+
+  function setMode(mode, showNotification = false) {
+    if (mode === 'when') {
+      if (switchContainer) switchContainer.classList.remove('where-active');
+      tabWhen.classList.add('active');
+      tabWhen.setAttribute('aria-pressed', 'true');
+      tabWhere.classList.remove('active');
+      tabWhere.setAttribute('aria-pressed', 'false');
+
+      // 1. Where to Meet 화면 완전 숨김 (시간표 가림 원천 차단)
+      contentWhere.classList.remove('active');
+      contentWhere.style.display = 'none';
+
+      // 2. When to Meet 시간표 화면만 온전히 단독 표시
+      contentWhen.classList.add('active');
+      contentWhen.style.display = 'flex';
+
+      if (modeBadge) {
+        modeBadge.textContent = '📅 시간표 조율';
+        modeBadge.className = 'nav-badge when-badge';
+      }
+
+      if (showNotification) {
+        showToast('📅 When to Meet (시간표 조율) 모드입니다.');
+      }
+    } else {
+      if (switchContainer) switchContainer.classList.add('where-active');
+      tabWhere.classList.add('active');
+      tabWhere.setAttribute('aria-pressed', 'true');
+      tabWhen.classList.remove('active');
+      tabWhen.setAttribute('aria-pressed', 'false');
+
+      // 1. When to Meet 시간표 화면 완전 숨김
+      contentWhen.classList.remove('active');
+      contentWhen.style.display = 'none';
+
+      // 2. Where to Meet 화면만 온전히 단독 표시
+      contentWhere.classList.add('active');
+      contentWhere.style.display = 'flex';
+
+      if (modeBadge) {
+        modeBadge.textContent = '📍 장소 찾기';
+        modeBadge.className = 'nav-badge where-badge';
+      }
+
+      // Where 참여자 출발지 목록 동기화
+      syncWhereParticipants();
+
+      if (showNotification) {
+        showToast('📍 Where to Meet (장소 찾기) 모드입니다.');
+      }
+    }
+  }
+
+  tabWhen.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMode('when', true);
   });
 
-  tabWhere.addEventListener('click', () => {
-    tabWhere.classList.add('active');
-    tabWhen.classList.remove('active');
-    contentWhen.style.display = 'none';
-    contentWhere.classList.add('active');
-    syncWhereParticipants();
+  tabWhere.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMode('where', true);
   });
+
+  // 스위치 컨테이너 트랙 클릭 시에도 직관적인 토글 작동
+  if (switchContainer) {
+    switchContainer.addEventListener('click', (e) => {
+      if (e.target === tabWhen || e.target === tabWhere || tabWhen.contains(e.target) || tabWhere.contains(e.target)) {
+        return;
+      }
+      const isWhere = switchContainer.classList.contains('where-active');
+      setMode(isWhere ? 'when' : 'where', true);
+    });
+  }
+
+  // 초기 상태: 웬투밋(When to Meet) 시간표를 가리는 창 없이 한눈에 표시
+  setMode('when', false);
 }
 
 // 툴바 및 컨트롤 버튼 이벤트
