@@ -232,41 +232,82 @@ function setupShareModal() {
   const btnOpen = document.getElementById('btnShareModal');
   const btnClose = document.getElementById('btnCloseShareModal');
 
-  const lanPort = window.location.port ? `:${window.location.port}` : '';
-  const lanUrl = `http://${SERVER_LOCAL_IP || window.location.hostname}${lanPort}/meet/${ROOM_ID}`;
-  const localUrl = `http://localhost${lanPort}/meet/${ROOM_ID}`;
+  // 현재 브라우저의 실제 접속 도메인/주소를 기준으로 공유 링크 생성
+  const shareUrl = `${window.location.origin}/meet/${ROOM_ID}`;
 
-  document.getElementById('shareLanUrlInput').value = lanUrl;
-  document.getElementById('shareLocalUrlInput').value = localUrl;
+  const roomInput = document.getElementById('shareRoomUrlInput') || document.getElementById('shareLanUrlInput');
+  if (roomInput) {
+    roomInput.value = shareUrl;
+  }
 
-  btnOpen.addEventListener('click', (e) => {
-    e.stopPropagation();
-    modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
-  });
+  // 로컬 호스트나 사설 IP로 접속 중일 경우 안내 문구 추가
+  const isLocalHost = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' || 
+                      window.location.hostname.startsWith('10.') || 
+                      window.location.hostname.startsWith('192.168.');
+  
+  const hintEl = document.getElementById('shareUrlHint');
+  if (hintEl && isLocalHost) {
+    hintEl.innerHTML = '<span style="color: #ea580c; font-weight: 600;">⚠️ 로컬(내 컴퓨터) 환경 주소입니다. 다른 네트워크의 친구가 접속하려면 배포된 도메인(Render 주소)을 이용해야 합니다.</span>';
+  }
 
-  btnClose.addEventListener('click', () => {
-    modal.style.display = 'none';
-  });
+  if (btnOpen) {
+    btnOpen.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (modal) {
+        modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
+        if (roomInput) {
+          roomInput.focus();
+          roomInput.select();
+        }
+      }
+    });
+  }
+
+  if (btnClose && modal) {
+    btnClose.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+  }
 
   document.addEventListener('click', (e) => {
-    if (!modal.contains(e.target) && e.target !== btnOpen) {
+    if (modal && !modal.contains(e.target) && e.target !== btnOpen) {
       modal.style.display = 'none';
     }
   });
 
-  document.getElementById('btnCopyLanUrl').addEventListener('click', () => {
-    navigator.clipboard.writeText(lanUrl).then(() => {
-      showToast('📱 공유용 네트워크 링크가 복사되었습니다!');
-      modal.style.display = 'none';
+  const copyBtn = document.getElementById('btnCopyShareUrl') || document.getElementById('btnCopyLanUrl');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showToast('🔗 모임 링크가 클립보드에 복사되었습니다!');
+          if (modal) modal.style.display = 'none';
+        }).catch(() => {
+          copyFallback(shareUrl, modal);
+        });
+      } else {
+        copyFallback(shareUrl, modal);
+      }
     });
-  });
+  }
+}
 
-  document.getElementById('btnCopyLocalUrl').addEventListener('click', () => {
-    navigator.clipboard.writeText(localUrl).then(() => {
-      showToast('💻 로컬 링크가 복사되었습니다!');
-      modal.style.display = 'none';
-    });
-  });
+function copyFallback(text, modal) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('🔗 모임 링크가 클립보드에 복사되었습니다!');
+    if (modal) modal.style.display = 'none';
+  } catch (err) {
+    showToast('복사에 실패했습니다. 링크를 직접 선택하여 복사해주세요.');
+  }
+  document.body.removeChild(ta);
 }
 
 // 서버에서 방 데이터 가져오기

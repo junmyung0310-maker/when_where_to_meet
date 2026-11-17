@@ -70,29 +70,21 @@
   <!-- 공유 링크 안내 모달/팝업 -->
   <div id="shareModal" class="card share-modal-popup" style="display: none;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      <strong style="color: #1e3a8a; font-size: 0.95rem;">🌐 다른 사람과 공유할 링크</strong>
+      <strong style="color: #1e3a8a; font-size: 0.95rem;">🌐 모임 참여 링크 공유</strong>
       <button id="btnCloseShareModal" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #64748b;">✕</button>
     </div>
     
-    <div style="margin-bottom: 10px;">
+    <div style="margin-bottom: 8px;">
       <label style="font-size: 0.78rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">
-        📱 다른 컴퓨터 / 스마트폰 접속용 (추천)
+        🔗 친구들에게 보낼 주소
       </label>
       <div style="display: flex; gap: 6px;">
-        <input type="text" id="shareLanUrlInput" class="form-control" readonly style="font-size: 0.8rem; padding: 5px 8px; background: #f8fafc;">
-        <button id="btnCopyLanUrl" class="btn btn-secondary btn-xs" style="white-space: nowrap;">복사</button>
+        <input type="text" id="shareRoomUrlInput" class="form-control" readonly style="font-size: 0.8rem; padding: 6px 8px; background: #f8fafc; font-weight: 500;">
+        <button id="btnCopyShareUrl" class="btn btn-primary btn-xs" style="white-space: nowrap; background: #2563eb; padding: 0 12px;">복사</button>
       </div>
-      <small style="font-size: 0.7rem; color: #64748b;">* 같은 와이파이 또는 네트워크에 연결된 기기에서 바로 접속됩니다.</small>
-    </div>
-
-    <div>
-      <label style="font-size: 0.78rem; font-weight: 600; color: #334155; display: block; margin-bottom: 4px;">
-        💻 내 컴퓨터 전용 (localhost)
-      </label>
-      <div style="display: flex; gap: 6px;">
-        <input type="text" id="shareLocalUrlInput" class="form-control" readonly style="font-size: 0.8rem; padding: 5px 8px; background: #f8fafc;">
-        <button id="btnCopyLocalUrl" class="btn btn-secondary btn-xs" style="white-space: nowrap;">복사</button>
-      </div>
+      <small id="shareUrlHint" style="font-size: 0.72rem; color: #64748b; display: block; margin-top: 6px;">
+        * 이 링크를 복사하여 친구들에게 전달하면 누구나 바로 접속할 수 있습니다.
+      </small>
     </div>
   </div>
 

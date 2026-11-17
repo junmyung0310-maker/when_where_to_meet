@@ -15,8 +15,8 @@
       <span>우리지금만나</span>
       <span class="nav-badge">When & Where</span>
     </div>
-    <div class="network-share-pill">
-      🌐 네트워크 공유 주소: <strong style="color: var(--primary-dark);">http://{{ local_ip }}:8000</strong>
+    <div class="network-share-pill" id="indexSharePill">
+      🌐 서비스 주소: <strong id="indexShareUrlText" style="color: var(--primary-dark);">http://{{ local_ip }}:8000</strong>
     </div>
   </header>
 
@@ -337,6 +337,12 @@
     initCalendar();
     initTimeSelects();
     loadRecentRooms();
+
+    // 현재 접속 주소 실시간 반영
+    const shareText = document.getElementById('indexShareUrlText');
+    if (shareText && window.location.origin) {
+      shareText.textContent = window.location.origin;
+    }
   </script>
 </body>
 </html>
