@@ -1,12 +1,18 @@
 import os
 import socket
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from dotenv import load_dotenv
 import storage
+import where
+
+# 환경 변수 로드
+load_dotenv()
+KAKAO_JS_KEY = os.getenv("KAKAO_JS_KEY", "").strip()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -15,7 +21,7 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
 
-app = FastAPI(title="When2Meet & Where2Meet", version="1.1.0")
+app = FastAPI(title="When2Meet & Where2Meet", version="1.2.0")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
@@ -25,7 +31,6 @@ def get_local_ip() -> str:
     """외부(로컬 LAN)에서 접속 가능한 현재 컴퓨터의 IP 주소를 반환"""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # 실제로 패킷을 보내지 않고 라우팅 테이블을 통해 로컬 네트워크 IP 확인
         s.connect(('8.8.8.8', 80))
         ip = s.getsockname()[0]
     except Exception:
@@ -57,6 +62,10 @@ class UpdateRequiredRequest(BaseModel):
 class SaveOriginRequest(BaseModel):
     name: str
     origin: str
+
+
+class WhereRequest(BaseModel):
+    purpose: str = "study"
 
 
 @app.get("/api/network-info")
@@ -98,7 +107,7 @@ async def create_new_room(data: CreateRoomRequest):
 # 직관적인 신규 주소: /meet/{room_id}
 @app.get("/meet/{room_id}", response_class=HTMLResponse)
 async def meet_page(room_id: str, request: Request):
-    """직관적인 모임 방 화면: 일정 조율 및 Where to Meet UI"""
+    """직관적인 모임 방 화면: 일정 조율 및 Where to Meet 실제 지도/추천 화면"""
     room = storage.get_room(room_id)
     if not room:
         return RedirectResponse(url="/?error=room_not_found")
@@ -106,7 +115,11 @@ async def meet_page(room_id: str, request: Request):
     return templates.TemplateResponse(
         request=request, 
         name="room.html", 
-        context={"room": room, "local_ip": local_ip}
+        context={
+            "room": room, 
+            "local_ip": local_ip,
+            "kakao_js_key": KAKAO_JS_KEY
+        }
     )
 
 
@@ -186,17 +199,68 @@ async def save_origin(room_id: str, data: SaveOriginRequest):
     if not room:
         raise HTTPException(status_code=404, detail="방을 찾을 수 없습니다.")
         
-    if data.name in room.get("participants", {}):
-        p = room["participants"][data.name]
-        p["origin"] = data.origin.strip()
+    updated = storage.save_participant_origin(room_id, data.name, data.origin)
+    if not updated:
+        # 혹시 기존 participants에 없는 이름이면 기본 일정과 함께 등록
         storage.save_participant_schedule(
             room_id=room_id,
             name=data.name,
-            available_slots=p.get("available_slots", []),
-            origin=data.origin.strip(),
-            is_required=p.get("is_required", False)
+            available_slots=[],
+            origin=data.origin.strip()
         )
     return {"success": True}
+
+
+# =====================================================================
+# Where to Meet (공평한 중간 장소 찾기) API
+# =====================================================================
+
+@app.post("/api/rooms/{room_id}/where")
+async def calculate_where(room_id: str, data: WhereRequest):
+    """
+    Where to Meet 중간 지점 및 목적별 장소 계산 API:
+    저장된 참여자들의 출발지를 기반으로 공평성 최적 역과 목적별 장소 산출 후 방에 저장.
+    """
+    room = storage.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="방을 찾을 수 없습니다.")
+
+    result = where.calculate_where_to_meet(room, purpose=data.purpose)
+    # 계산 결과 및 갱신된 참여자 좌표(lat, lng) 저장
+    storage.save_where_result(room_id, result)
+    storage._save_all_rooms(storage._load_all_rooms())
+    return result
+
+
+@app.get("/api/rooms/{room_id}/where")
+async def get_where(room_id: str):
+    """Where to Meet 마지막 계산 결과 조회 API"""
+    room = storage.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="방을 찾을 수 없습니다.")
+    
+    where_res = room.get("where_result")
+    if not where_res:
+        return {"success": False, "message": "아직 계산된 중간 장소 결과가 없습니다."}
+    return where_res
+
+
+@app.get("/api/rooms/{room_id}/where/places")
+async def get_places(
+    room_id: str, 
+    station: str = Query(..., description="지하철역 이름"),
+    lat: float = Query(..., description="위도"),
+    lng: float = Query(..., description="경도"),
+    purpose: str = Query("study", description="모임 목적 (study, cafe, dinner, drink)")
+):
+    """특정 지하철역 주변의 모임 목적 맞춤형 추천 장소 반환 API"""
+    room = storage.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="방을 찾을 수 없습니다.")
+
+    station_dict = {"name": station, "lat": lat, "lng": lng}
+    places = where.search_places(station_dict, purpose=purpose)
+    return {"success": True, "places": places}
 
 
 if __name__ == "__main__":
@@ -209,5 +273,4 @@ if __name__ == "__main__":
     print(f"🌐 다른 컴퓨터/스마트폰 접속: http://{local_ip}:{port}")
     print("="*65 + "\n")
     
-    # 0.0.0.0 으로 바인딩하여 LAN/Wi-Fi 내 다른 기기 접속 허용
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

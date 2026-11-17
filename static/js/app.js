@@ -1,6 +1,6 @@
-// When2Meet & Where2Meet 클라이언트 스크립트
+// When2Meet & Where2Meet 통합 클라이언트 스크립트
 
-// 전역 상태
+// 전역 상태 (When to Meet)
 let currentRoom = null;
 let currentSummary = null;
 let mySelectedSlots = new Set();
@@ -8,7 +8,26 @@ let isMouseDown = false;
 let currentDragAction = 'add'; // 'add' or 'remove'
 let activeMode = 'auto'; // 'auto', 'add', 'remove'
 
+// 전역 상태 (Where to Meet)
+let kakaoMap = null;
+let mapMarkers = [];
+let mapCustomOverlays = [];
+let currentWhereResult = null;
+let selectedCandidateStation = null;
+let currentPurpose = 'study';
+
 const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+// HTML 안전 이스케이프 유틸리티
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // 토스트 메시지 유틸
 function showToast(msg) {
@@ -37,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTabs();
   setupToolbar();
   setupShareModal();
-  setupWherePreview();
+  setupWhereTab();
   setupSynchronizedScroll();
 
   // 이전 참여자 이름 복원
@@ -46,13 +65,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('userNameInput').value = savedName;
   }
 
-  // 초기 데이터 로드
+  // 초기 데이터 로드 (When to Meet)
   await fetchRoomData();
 
   // 자동 복원 시도
   if (savedName) {
     loadUserSchedule(savedName, false);
   }
+
+  // 카카오 지도 SDK 초기화
+  initKakaoMap();
+
+  // 이전 Where to Meet 계산 결과가 있다면 복원
+  await loadSavedWhereResult();
 });
 
 // 탭 전환 설정
@@ -62,20 +87,40 @@ function setupTabs() {
   const contentWhen = document.getElementById('whenTabContent');
   const contentWhere = document.getElementById('whereTabContent');
 
-  tabWhen.addEventListener('click', () => {
+  function showWhenTab() {
     tabWhen.classList.add('active');
     tabWhere.classList.remove('active');
-    contentWhen.style.display = 'block';
+    contentWhen.style.display = 'flex';
+    contentWhere.style.display = 'none';
+    contentWhen.classList.add('active');
     contentWhere.classList.remove('active');
-  });
+  }
 
-  tabWhere.addEventListener('click', () => {
+  function showWhereTab() {
     tabWhere.classList.add('active');
     tabWhen.classList.remove('active');
     contentWhen.style.display = 'none';
+    contentWhere.style.display = 'flex';
     contentWhere.classList.add('active');
+    contentWhen.classList.remove('active');
     syncWhereParticipants();
-  });
+
+    // 탭 전환 시 지도가 깨지지 않도록 relayout
+    if (kakaoMap) {
+      setTimeout(() => {
+        kakaoMap.relayout();
+        if (currentWhereResult && currentWhereResult.candidates) {
+          fitMapBounds(currentWhereResult.origins, currentWhereResult.candidates);
+        }
+      }, 100);
+    }
+  }
+
+  tabWhen.addEventListener('click', showWhenTab);
+  tabWhere.addEventListener('click', showWhereTab);
+
+  // 초기 상태: When to Meet 탭 표시, Where to Meet 탭 숨김
+  showWhenTab();
 }
 
 // 툴바 및 컨트롤 버튼 이벤트
@@ -120,13 +165,12 @@ function setupToolbar() {
     loadUserSchedule(name, true);
   });
 
-  // 전역 마우스업 감지 (드래그 종료)
   window.addEventListener('mouseup', () => {
     isMouseDown = false;
   });
 }
 
-// 공유 링크 모달 설정 (다른 사람 컴퓨터 접속용 IP 포함)
+// 공유 링크 모달 설정
 function setupShareModal() {
   const modal = document.getElementById('shareModal');
   const btnOpen = document.getElementById('btnShareModal');
@@ -359,7 +403,6 @@ function renderGroupSchedule() {
       }
       td.classList.add(`group-heat-${heatLevel}`);
 
-      // 필수 참석자 전원 가능 시 테두리 강조 (필수 참석자가 1명 이상 지정되어 있을 때)
       if (currentSummary.required_participants && currentSummary.required_participants.length > 0) {
         if (stat.all_required_available && stat.count > 0) {
           td.classList.add('required-ok');
@@ -396,14 +439,14 @@ function showHoverDetails(date, time, stat) {
   const requiredSet = new Set(currentSummary.required_participants || []);
   
   if (stat.available_users && stat.available_users.length > 0) {
-    const formattedAvail = stat.available_users.map(u => requiredSet.has(u) ? `<strong>${u}⭐</strong>` : u);
+    const formattedAvail = stat.available_users.map(u => requiredSet.has(u) ? `<strong>${escapeHtml(u)}⭐</strong>` : escapeHtml(u));
     availTextEl.innerHTML = formattedAvail.join(', ');
   } else {
     availTextEl.textContent = '없음';
   }
 
   if (stat.unavailable_users && stat.unavailable_users.length > 0) {
-    const formattedUnavail = stat.unavailable_users.map(u => requiredSet.has(u) ? `<strong>${u}⭐</strong>` : u);
+    const formattedUnavail = stat.unavailable_users.map(u => requiredSet.has(u) ? `<strong>${escapeHtml(u)}⭐</strong>` : escapeHtml(u));
     unavailTextEl.innerHTML = formattedUnavail.join(', ');
   } else {
     unavailTextEl.textContent = '전원 가능 🎉';
@@ -416,7 +459,7 @@ function resetHoverDetails() {
   document.getElementById('hoverUnavailText').textContent = '-';
 }
 
-// 필수 참석자(VIP) 선택 체크박스 목록 렌더링 및 변경 이벤트 ★
+// 필수 참석자(VIP) 선택 체크박스 목록 렌더링
 function renderRequiredCheckboxes() {
   const container = document.getElementById('requiredParticipantsList');
   const countBadge = document.getElementById('requiredCountBadge');
@@ -458,8 +501,8 @@ function renderRequiredCheckboxes() {
     `;
 
     item.innerHTML = `
-      <input type="checkbox" value="${name}" ${isChecked ? 'checked' : ''} style="accent-color: #f59e0b; cursor: pointer; transform: scale(0.85);">
-      <span>${name}</span>
+      <input type="checkbox" value="${escapeHtml(name)}" ${isChecked ? 'checked' : ''} style="accent-color: #f59e0b; cursor: pointer; transform: scale(0.85);">
+      <span>${escapeHtml(name)}</span>
       ${isChecked ? '<span style="color: #d97706; font-size: 0.7rem;">⭐</span>' : ''}
     `;
 
@@ -503,7 +546,7 @@ async function updateRequiredSelection(requiredNames) {
   }
 }
 
-// TOP 3 추천 시간대 렌더링 (컴팩트 슬림 바)
+// TOP 3 추천 시간대 렌더링
 function renderTopRecommendations() {
   const container = document.getElementById('recCardsContainer');
   const section = document.getElementById('topRecSection');
@@ -541,7 +584,7 @@ function renderTopRecommendations() {
   });
 }
 
-// 시간표 동기화 스크롤 설정 (좌/우 테이블 스크롤 연동)
+// 시간표 동기화 스크롤 설정
 function setupSynchronizedScroll() {
   const left = document.getElementById('myScheduleWrapper');
   const right = document.getElementById('groupScheduleTableContainer');
@@ -590,7 +633,7 @@ function clearHighlights() {
   });
 }
 
-// 참여자 명단 칩 렌더링 및 호버 하이라이트
+// 참여자 명단 칩 렌더링
 function renderParticipantChips() {
   const container = document.getElementById('participantChipsList');
   container.innerHTML = '';
@@ -608,7 +651,7 @@ function renderParticipantChips() {
     const chip = document.createElement('div');
     chip.className = 'p-chip';
     chip.innerHTML = `
-      <span>${name}</span>
+      <span>${escapeHtml(name)}</span>
       ${p.is_required ? '<span class="required-badge">⭐ 필수</span>' : ''}
     `;
 
@@ -698,75 +741,584 @@ async function saveMySchedule() {
   }
 }
 
-// WHERE TO MEET UI 미리보기 설정
-function setupWherePreview() {
-  document.querySelectorAll('.purpose-card').forEach(card => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.purpose-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      showToast(`'${card.querySelector('.purpose-name').textContent}' 목적이 선택되었습니다.`);
-    });
-  });
 
-  document.getElementById('btnRunWherePreview').addEventListener('click', () => {
-    showToast('⚡ 대중교통 최적 중간 장소 계산 시뮬레이션 완료! (현재 UI 프리뷰 단계입니다)');
+// =====================================================================
+// WHERE TO MEET (공평한 중간 장소 추천) 클라이언트 로직
+// =====================================================================
+
+function initKakaoMap() {
+  const mapContainer = document.getElementById('kakaoMap');
+  const fallbackNotice = document.getElementById('mapFallbackNotice');
+
+  if (!window.kakao || !window.kakao.maps) {
+    if (fallbackNotice) {
+      fallbackNotice.style.display = 'flex';
+      fallbackNotice.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+          <p style="font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;">🗺️ 카카오 지도 SDK 대기 중</p>
+          <p style="font-size: 0.8rem; color: #64748b;">
+            ${KAKAO_JS_KEY ? '카카오 지도 라이브러리를 로드하고 있습니다.' : '카카오 JavaScript 키가 .env에 설정되지 않았습니다.'}
+          </p>
+        </div>
+      `;
+    }
+    return;
+  }
+
+  window.kakao.maps.load(() => {
+    try {
+      const options = {
+        center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 시청 중심
+        level: 8
+      };
+      kakaoMap = new kakao.maps.Map(mapContainer, options);
+      if (fallbackNotice) fallbackNotice.style.display = 'none';
+
+      // 줌 컨트롤 추가
+      const zoomControl = new kakao.maps.ZoomControl();
+      kakaoMap.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+      if (currentWhereResult && currentWhereResult.candidates) {
+        fitMapBounds(currentWhereResult.origins, currentWhereResult.candidates);
+      }
+    } catch (e) {
+      console.error('Kakao Map init failed:', e);
+      if (fallbackNotice) fallbackNotice.style.display = 'flex';
+    }
   });
 }
 
+function setupWhereTab() {
+  // 모임 목적 카드 클릭
+  document.querySelectorAll('.purpose-card').forEach(card => {
+    card.addEventListener('click', async () => {
+      document.querySelectorAll('.purpose-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      currentPurpose = card.dataset.purpose;
+      const purposeName = card.querySelector('.purpose-name').textContent;
+      showToast(`'${purposeName}' 모임 목적이 선택되었습니다.`);
+
+      // 이미 선택된 후보 역이 있다면 해당 역의 장소 목록을 실시간으로 다시 조회
+      if (selectedCandidateStation) {
+        await fetchPlacesForStation(selectedCandidateStation, currentPurpose);
+      }
+    });
+  });
+
+  // 최적 중간 지점 계산 버튼
+  const btnCalc = document.getElementById('btnRunWhereCalc');
+  if (btnCalc) {
+    btnCalc.addEventListener('click', runWhereCalculation);
+  }
+
+  // 팀원 직접 추가 버튼 및 엔터 키 이벤트
+  const btnAddUser = document.getElementById('btnAddWhereParticipant');
+  const inputNewUser = document.getElementById('inputNewParticipantName');
+  if (btnAddUser && inputNewUser) {
+    const handleAddUser = () => {
+      const newName = inputNewUser.value.trim();
+      if (!newName) {
+        showToast('추가할 팀원 이름을 입력해주세요.');
+        inputNewUser.focus();
+        return;
+      }
+      if (currentRoom) {
+        if (!currentRoom.participants) currentRoom.participants = {};
+        if (!currentRoom.participants[newName]) {
+          currentRoom.participants[newName] = { name: newName, available_slots: [], origin: '' };
+        }
+      }
+      inputNewUser.value = '';
+      syncWhereParticipants();
+      showToast(`'${newName}' 팀원이 추가되었습니다. 출발지를 입력해주세요.`);
+    };
+
+    btnAddUser.addEventListener('click', handleAddUser);
+    inputNewUser.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAddUser();
+      }
+    });
+  }
+}
+
+// Where to Meet 계산 실행 API 호출
+async function runWhereCalculation() {
+  const btnCalc = document.getElementById('btnRunWhereCalc');
+  const statusText = document.getElementById('whereCalcStatusText');
+  
+  btnCalc.disabled = true;
+  btnCalc.innerHTML = '⏳ 계산 중...';
+  if (statusText) statusText.textContent = '대중교통 경로 및 공평성 계산 중...';
+
+  try {
+    const res = await fetch(`/api/rooms/${ROOM_ID}/where`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: currentPurpose })
+    });
+
+    const data = await res.json();
+    currentWhereResult = data;
+
+    renderWhereWarnings(data.warnings || []);
+
+    if (data.success && data.candidates && data.candidates.length > 0) {
+      selectedCandidateStation = data.candidates[0]; // 1위 역 기본 선택
+      renderWhereCandidates(data.candidates);
+      renderWhereTransitChart(selectedCandidateStation);
+      renderWherePlaces(data.places || []);
+      renderMapMarkers(data.origins || [], data.candidates || [], selectedCandidateStation);
+      showToast(`🎯 최적 중간 장소 1위 '${selectedCandidateStation.name}' 계산 완료!`);
+      if (statusText) statusText.textContent = `1위: ${selectedCandidateStation.name}`;
+    } else {
+      const warnMsg = (data.warnings && data.warnings.length > 0) 
+        ? data.warnings[0] 
+        : '중간 장소를 계산할 수 없습니다. 출발지를 확인해주세요.';
+      showToast(warnMsg);
+      if (statusText) statusText.textContent = '계산 실패';
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('중간 지점 계산 중 오류가 발생했습니다.');
+    if (statusText) statusText.textContent = '오류 발생';
+  } finally {
+    btnCalc.disabled = false;
+    btnCalc.innerHTML = '⚡ 최적 중간 지점 계산하기';
+  }
+}
+
+// 저장된 결과 복원
+async function loadSavedWhereResult() {
+  try {
+    const res = await fetch(`/api/rooms/${ROOM_ID}/where`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.success && data.candidates && data.candidates.length > 0) {
+      currentWhereResult = data;
+      selectedCandidateStation = data.candidates[0];
+      if (data.purpose) {
+        currentPurpose = data.purpose;
+        document.querySelectorAll('.purpose-card').forEach(c => {
+          c.classList.toggle('selected', c.dataset.purpose === currentPurpose);
+        });
+      }
+      renderWhereWarnings(data.warnings || []);
+      renderWhereCandidates(data.candidates);
+      renderWhereTransitChart(selectedCandidateStation);
+      renderWherePlaces(data.places || []);
+      renderMapMarkers(data.origins || [], data.candidates || [], selectedCandidateStation);
+      
+      const statusText = document.getElementById('whereCalcStatusText');
+      if (statusText) statusText.textContent = `1위: ${selectedCandidateStation.name}`;
+    }
+  } catch (e) {
+    console.warn('Saved where result load skipped:', e);
+  }
+}
+
+// 경고/안내 배너 렌더링
+function renderWhereWarnings(warnings) {
+  const box = document.getElementById('whereWarningsContainer');
+  if (!box) return;
+
+  if (!warnings || warnings.length === 0) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div style="font-weight: 700; margin-bottom: 4px;">⚠️ 안내 사항</div>
+    <ul style="margin: 0; padding-left: 18px;">
+      ${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}
+    </ul>
+  `;
+}
+
+// 추천 역 순위 카드 목록 렌더링
+function renderWhereCandidates(candidates) {
+  const container = document.getElementById('whereCandidatesList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!candidates || candidates.length === 0) {
+    container.innerHTML = `
+      <div class="where-empty-notice">
+        추천할 수 있는 역을 찾지 못했습니다.
+      </div>
+    `;
+    return;
+  }
+
+  candidates.forEach(cand => {
+    const isSelected = selectedCandidateStation && selectedCandidateStation.name === cand.name;
+    const card = document.createElement('div');
+    card.className = `where-candidate-card ${isSelected ? 'active' : ''}`;
+    
+    // 랭크 배지 색상
+    let rankBadgeClass = 'rank-badge-other';
+    if (cand.rank === 1) rankBadgeClass = 'rank-badge-1';
+    else if (cand.rank === 2) rankBadgeClass = 'rank-badge-2';
+    else if (cand.rank === 3) rankBadgeClass = 'rank-badge-3';
+
+    card.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="cand-rank-badge ${rankBadgeClass}">${cand.rank}위</span>
+          <span class="cand-station-name">${escapeHtml(cand.name)}</span>
+        </div>
+        <span class="cand-max-time">최대 <strong>${cand.max_time}분</strong></span>
+      </div>
+      <div class="cand-metrics-row">
+        <span>최대 편차: <strong>${cand.diff}분</strong></span>
+        <span>·</span>
+        <span>소요시간 합계: <strong>${cand.total}분</strong></span>
+      </div>
+    `;
+
+    card.addEventListener('click', async () => {
+      document.querySelectorAll('.where-candidate-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      selectedCandidateStation = cand;
+
+      renderWhereTransitChart(cand);
+      highlightCandidateMarker(cand);
+      await fetchPlacesForStation(cand, currentPurpose);
+    });
+
+    container.appendChild(card);
+  });
+}
+
+// 참여자별 이동 시간 막대 차트 렌더링
+function renderWhereTransitChart(station) {
+  const chartBox = document.getElementById('whereTransitChart');
+  const titleName = document.getElementById('whereSelectedStationName');
+  const diffBadge = document.getElementById('whereDiffBadge');
+
+  if (titleName) titleName.textContent = station ? station.name : '-';
+  if (diffBadge) {
+    if (station) {
+      diffBadge.style.display = 'inline-block';
+      diffBadge.textContent = `최대 편차 ${station.diff}분`;
+    } else {
+      diffBadge.style.display = 'none';
+    }
+  }
+
+  if (!chartBox || !station || !station.times) {
+    if (chartBox) {
+      chartBox.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 10px;">이동 시간 정보가 없습니다.</div>';
+    }
+    return;
+  }
+
+  chartBox.innerHTML = '';
+  const entries = Object.entries(station.times);
+  const maxTime = station.max_time || 60;
+
+  entries.forEach(([name, minutes]) => {
+    const isBottleneck = minutes === station.max_time && entries.length > 1;
+    const ratio = Math.max(8, Math.min(100, Math.round((minutes / maxTime) * 100)));
+
+    const row = document.createElement('div');
+    row.className = 'transit-bar-row';
+    row.innerHTML = `
+      <span class="transit-user-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      <div class="transit-bar-track">
+        <div class="transit-bar-fill ${isBottleneck ? 'bottleneck' : ''}" style="width: ${ratio}%;">
+          <span class="transit-bar-label">${minutes}분</span>
+        </div>
+      </div>
+      ${isBottleneck ? '<span class="transit-bottleneck-tag">최대소요</span>' : '<span style="width: 48px;"></span>'}
+    `;
+    chartBox.appendChild(row);
+  });
+}
+
+// 특정 역 주변 장소 목록 API 호출 및 렌더링
+async function fetchPlacesForStation(station, purpose) {
+  const container = document.getElementById('wherePlaceList');
+  const titleEl = document.getElementById('wherePlaceStationTitle');
+  if (titleEl) titleEl.textContent = station.name;
+
+  if (container) {
+    container.innerHTML = '<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 10px;">장소를 검색하고 있습니다...</div>';
+  }
+
+  try {
+    const url = `/api/rooms/${ROOM_ID}/where/places?station=${encodeURIComponent(station.name)}&lat=${station.lat}&lng=${station.lng}&purpose=${purpose}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.success) {
+      renderWherePlaces(data.places || []);
+    }
+  } catch (err) {
+    console.error(err);
+    if (container) {
+      container.innerHTML = '<div style="font-size: 0.78rem; color: #ef4444; text-align: center; padding: 10px;">장소 검색 중 오류가 발생했습니다.</div>';
+    }
+  }
+}
+
+// 목적별 추천 장소 카드 목록 렌더링
+function renderWherePlaces(places) {
+  const container = document.getElementById('wherePlaceList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!places || places.length === 0) {
+    container.innerHTML = `
+      <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 12px;">
+        추천된 역 인근에서 조건에 맞는 장소를 찾지 못했습니다.
+      </div>
+    `;
+    return;
+  }
+
+  places.forEach((p, idx) => {
+    const card = document.createElement('div');
+    card.className = 'place-card-item';
+    card.innerHTML = `
+      <div class="place-card-header">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="place-rank-num">${idx + 1}</span>
+          <strong class="place-name">${escapeHtml(p.name)}</strong>
+        </div>
+        <span class="place-distance">${p.distance}m</span>
+      </div>
+      <div class="place-address">${escapeHtml(p.address)}</div>
+      <div class="place-footer">
+        <span class="place-category">${escapeHtml(p.category)}</span>
+        ${p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" class="place-link-btn">카카오맵 바로가기 ↗</a>` : ''}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// 카카오 지도 마커 및 인포 오버레이 렌더링
+function renderMapMarkers(origins, candidates, selectedStation) {
+  if (!kakaoMap) return;
+
+  // 기존 마커 및 오버레이 제거
+  clearMapMarkers();
+
+  const bounds = new kakao.maps.LatLngBounds();
+  let hasPoints = false;
+
+  // 1. 참여자 출발지 마커들 (파란색/기본 핀 + 커스텀 오버레이 이름표)
+  origins.forEach(orig => {
+    if (orig.found && orig.lat && orig.lng) {
+      const pos = new kakao.maps.LatLng(orig.lat, orig.lng);
+      bounds.extend(pos);
+      hasPoints = true;
+
+      // 마커 생성
+      const marker = new kakao.maps.Marker({
+        position: pos,
+        map: kakaoMap
+      });
+      mapMarkers.push(marker);
+
+      // 이름 오버레이
+      const overlayContent = document.createElement('div');
+      overlayContent.className = 'map-user-overlay';
+      overlayContent.innerHTML = `<span>👤 ${escapeHtml(orig.name)}</span>`;
+
+      const overlay = new kakao.maps.CustomOverlay({
+        position: pos,
+        content: overlayContent,
+        yAnchor: 2.2
+      });
+      overlay.setMap(kakaoMap);
+      mapCustomOverlays.push(overlay);
+    }
+  });
+
+  // 2. 후보 지하철역 마커들 (1위 강조 핀, 2/3위 보조 핀)
+  candidates.forEach(cand => {
+    const pos = new kakao.maps.LatLng(cand.lat, cand.lng);
+    bounds.extend(pos);
+    hasPoints = true;
+
+    const isTop1 = cand.rank === 1;
+    const isSelected = selectedStation && selectedStation.name === cand.name;
+
+    // 커스텀 역 핀 오버레이
+    const stOverlayEl = document.createElement('div');
+    stOverlayEl.className = `map-station-overlay ${isTop1 ? 'top1' : ''} ${isSelected ? 'selected' : ''}`;
+    stOverlayEl.innerHTML = `
+      <span class="station-rank">${cand.rank}위</span>
+      <span class="station-label">${escapeHtml(cand.name)}</span>
+    `;
+
+    stOverlayEl.addEventListener('click', () => {
+      // 역 클릭 시 해당 역 선택
+      const card = document.querySelector(`.where-candidate-card[data-name="${cand.name}"]`);
+      if (card) card.click();
+      else {
+        selectedCandidateStation = cand;
+        renderWhereTransitChart(cand);
+        fetchPlacesForStation(cand, currentPurpose);
+      }
+    });
+
+    const overlay = new kakao.maps.CustomOverlay({
+      position: pos,
+      content: stOverlayEl,
+      yAnchor: 1.2
+    });
+    overlay.setMap(kakaoMap);
+    mapCustomOverlays.push(overlay);
+  });
+
+  // 모든 핀이 화면에 보이도록 Bounds 자동 조정
+  if (hasPoints) {
+    kakaoMap.setBounds(bounds);
+  }
+}
+
+function clearMapMarkers() {
+  mapMarkers.forEach(m => m.setMap(null));
+  mapMarkers = [];
+  mapCustomOverlays.forEach(o => o.setMap(null));
+  mapCustomOverlays = [];
+}
+
+function highlightCandidateMarker(cand) {
+  if (!kakaoMap || !cand) return;
+  kakaoMap.panTo(new kakao.maps.LatLng(cand.lat, cand.lng));
+  
+  // 지도 상의 오버레이 선택 클래스 갱신
+  document.querySelectorAll('.map-station-overlay').forEach(el => {
+    if (el.textContent.includes(cand.name)) {
+      el.classList.add('selected');
+    } else {
+      el.classList.remove('selected');
+    }
+  });
+}
+
+function fitMapBounds(origins, candidates) {
+  if (!kakaoMap) return;
+  const bounds = new kakao.maps.LatLngBounds();
+  let hasPt = false;
+
+  (origins || []).forEach(o => {
+    if (o.found && o.lat && o.lng) {
+      bounds.extend(new kakao.maps.LatLng(o.lat, o.lng));
+      hasPt = true;
+    }
+  });
+
+  (candidates || []).forEach(c => {
+    if (c.lat && c.lng) {
+      bounds.extend(new kakao.maps.LatLng(c.lat, c.lng));
+      hasPt = true;
+    }
+  });
+
+  if (hasPt) {
+    kakaoMap.setBounds(bounds);
+  }
+}
+
+// Where 탭 출발지 목록 동기화
 function syncWhereParticipants() {
   const container = document.getElementById('whereOriginInputsList');
   if (!container) return;
   container.innerHTML = '';
 
-  const participants = currentRoom ? currentRoom.participants : {};
-  const names = Object.keys(participants);
+  const participants = currentRoom ? (currentRoom.participants || {}) : {};
+  const participantNames = Object.keys(participants);
 
-  if (names.length === 0) {
-    const defaults = [
-      { name: '김준명', origin: '강남역' },
-      { name: '유한영', origin: '혜화역' },
-      { name: '이랑', origin: '수원역' }
-    ];
-    defaults.forEach(d => {
-      createOriginInputRow(container, d.name, d.origin, true);
-    });
+  // When to Meet 이름 입력창에 현재 적혀있는 내 이름 (아직 저장을 누르지 않은 경우에도 편의를 위해 포함)
+  const inputEl = document.getElementById('userNameInput');
+  const typedName = inputEl ? inputEl.value.trim() : '';
+
+  // 표시할 팀원 명단 (When to meet에서 설정한 팀원들 + 현재 입력된 이름)
+  const displayNames = [...participantNames];
+  if (typedName && !displayNames.includes(typedName)) {
+    displayNames.push(typedName);
+  }
+
+  if (displayNames.length === 0) {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.className = 'where-empty-notice';
+    emptyNotice.style.padding = '14px 10px';
+    emptyNotice.style.textAlign = 'center';
+    emptyNotice.style.fontSize = '0.8rem';
+    emptyNotice.style.color = 'var(--text-muted)';
+    emptyNotice.style.background = '#f8fafc';
+    emptyNotice.style.borderRadius = '8px';
+    emptyNotice.style.border = '1px dashed #cbd5e1';
+    emptyNotice.innerHTML = `
+      <span>📅 아직 등록된 팀원이 없습니다.</span><br>
+      <span style="font-size: 0.74rem; color: #64748b; margin-top: 4px; display: inline-block;">
+        <strong>When to Meet(일정 조율)</strong>에서 시간표를 저장하거나,<br>아래에서 팀원을 직접 추가해주세요.
+      </span>
+    `;
+    container.appendChild(emptyNotice);
   } else {
-    names.forEach(name => {
-      const p = participants[name];
-      createOriginInputRow(container, name, p.origin || '', false);
+    displayNames.forEach(name => {
+      const p = participants[name] || {};
+      createOriginInputRow(container, name, p.origin || '');
     });
   }
 }
 
-function createOriginInputRow(container, name, originVal, isMock) {
+function createOriginInputRow(container, name, originVal) {
   const row = document.createElement('div');
   row.className = 'origin-input-row';
   row.innerHTML = `
-    <span class="origin-user-name" title="${name}">${name}</span>
+    <span class="origin-user-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
     <input 
       type="text" 
-      class="form-control" 
-      style="padding: 6px 10px; font-size: 0.85rem;" 
-      placeholder="출발역 또는 주소 (예: 강남역)" 
-      value="${originVal}"
+      class="form-control origin-field-input" 
+      placeholder="역 이름 또는 주소 (예: 강남역)" 
+      value="${escapeHtml(originVal)}"
     >
   `;
 
   const input = row.querySelector('input');
-  input.addEventListener('change', async () => {
-    if (!isMock) {
-      try {
-        await fetch(`/api/rooms/${ROOM_ID}/origin`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name, origin: input.value.trim() })
-        });
-        showToast(`${name}님의 출발지가 저장되었습니다.`);
-      } catch (e) {
-        console.error(e);
+  
+  const handleSaveOrigin = async () => {
+    const val = input.value.trim();
+    try {
+      const res = await fetch(`/api/rooms/${ROOM_ID}/origin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, origin: val })
+      });
+      if (res.ok) {
+        showToast(`'${name}'님의 출발지('${val || '미입력'}')가 저장되었습니다.`);
+        if (currentRoom) {
+          if (!currentRoom.participants) currentRoom.participants = {};
+          if (!currentRoom.participants[name]) {
+            currentRoom.participants[name] = { name: name, available_slots: [], origin: val };
+          } else {
+            currentRoom.participants[name].origin = val;
+            delete currentRoom.participants[name].lat;
+            delete currentRoom.participants[name].lng;
+          }
+        }
+      } else {
+        showToast('출발지 저장에 실패했습니다.');
       }
-    } else {
-      showToast(`${name}님의 출발지가 임시 설정되었습니다.`);
+    } catch (e) {
+      console.error(e);
+      showToast('출발지 저장 중 통신 오류가 발생했습니다.');
+    }
+  };
+
+  input.addEventListener('change', handleSaveOrigin);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      input.blur();
     }
   });
 
