@@ -4,12 +4,71 @@ import re
 import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 ROOMS_FILE = os.path.join(DATA_DIR, "rooms.json")
 
+# MongoDB connection cache
+_mongo_client = None
+_mongo_col = None
+_mongo_checked = False
+
+def _get_mongo_col():
+    global _mongo_client, _mongo_col, _mongo_checked
+    if _mongo_checked:
+        return _mongo_col
+    _mongo_checked = True
+    uri = os.getenv("MONGODB_URI")
+    if not uri:
+        return None
+    try:
+        from pymongo import MongoClient
+        _mongo_client = MongoClient(uri, serverSelectionTimeoutMS=4000)
+        db = _mongo_client.get_database("ww2meet")
+        col = db["rooms"]
+        # Quick ping check
+        _mongo_client.admin.command('ping')
+        _mongo_col = col
+
+        # If MongoDB is empty, automatically migrate existing local rooms.json
+        if _mongo_col.count_documents({}) == 0 and os.path.exists(ROOMS_FILE):
+            try:
+                with open(ROOMS_FILE, "r", encoding="utf-8") as f:
+                    local_rooms = json.load(f)
+                if local_rooms:
+                    for r_id, r_data in local_rooms.items():
+                        doc = dict(r_data)
+                        doc["_id"] = r_id
+                        _mongo_col.replace_one({"_id": r_id}, doc, upsert=True)
+                    print(f"[Storage] Successfully migrated {len(local_rooms)} local rooms to MongoDB Atlas!")
+            except Exception as me:
+                print(f"[Storage] Migration notice: {me}")
+
+        return _mongo_col
+    except Exception as e:
+        print(f"[Storage] MongoDB connection notice: {e}. Falling back to local file storage.")
+        _mongo_col = None
+        return None
+
 def _load_all_rooms() -> Dict[str, Any]:
+    col = _get_mongo_col()
+    if col is not None:
+        try:
+            rooms = {}
+            for doc in col.find():
+                r_id = doc.get("id") or str(doc.get("_id"))
+                doc_copy = dict(doc)
+                doc_copy["id"] = r_id
+                doc_copy.pop("_id", None)
+                rooms[r_id] = doc_copy
+            return rooms
+        except Exception as e:
+            print(f"[Storage] MongoDB load failed: {e}. Falling back to file.")
+    
     if not os.path.exists(ROOMS_FILE):
         return {}
     try:
@@ -19,8 +78,21 @@ def _load_all_rooms() -> Dict[str, Any]:
         return {}
 
 def _save_all_rooms(rooms: Dict[str, Any]) -> None:
-    with open(ROOMS_FILE, "w", encoding="utf-8") as f:
-        json.dump(rooms, f, ensure_ascii=False, indent=2)
+    col = _get_mongo_col()
+    if col is not None:
+        try:
+            for r_id, r_data in rooms.items():
+                doc = dict(r_data)
+                doc["_id"] = r_id
+                col.replace_one({"_id": r_id}, doc, upsert=True)
+        except Exception as e:
+            print(f"[Storage] MongoDB save failed: {e}")
+
+    try:
+        with open(ROOMS_FILE, "w", encoding="utf-8") as f:
+            json.dump(rooms, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def generate_time_slots(start_time: str, end_time: str) -> List[str]:
     """
@@ -84,6 +156,18 @@ def create_room(
     return room_data
 
 def get_room(room_id: str) -> Optional[Dict[str, Any]]:
+    col = _get_mongo_col()
+    if col is not None:
+        try:
+            doc = col.find_one({"_id": room_id})
+            if doc:
+                doc_copy = dict(doc)
+                doc_copy["id"] = room_id
+                doc_copy.pop("_id", None)
+                return doc_copy
+            return None
+        except Exception as e:
+            print(f"[Storage] MongoDB get_room failed: {e}")
     rooms = _load_all_rooms()
     return rooms.get(room_id)
 
