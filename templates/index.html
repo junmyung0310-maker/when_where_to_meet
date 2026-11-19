@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>When2Meet & Where2Meet - 약속 시간 및 장소 조율</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -32,7 +32,7 @@
             <p class="index-main-desc">약속 시간 조율과 중간 장소 추천을 한 화면에서!</p>
           </div>
 
-          <div class="form-group compact-group">
+          <div class="form-group compact-group" id="roomTitleGroup">
             <label class="form-label" for="roomTitle">모임 제목</label>
             <input 
               type="text" 
@@ -45,7 +45,7 @@
           </div>
 
           <!-- 직관적인 URL 설정 (선택 사항) -->
-          <div class="form-group compact-group">
+          <div class="form-group compact-group" id="customIdGroup">
             <label class="form-label" for="customIdInput">
               맞춤 링크 주소 <small style="font-weight: normal; color: var(--text-muted);">(선택 사항)</small>
             </label>
@@ -62,7 +62,7 @@
           </div>
 
           <!-- 가능 시간대 범위 (00:00 ~ 24:00 전 범위 지원) -->
-          <div class="form-group compact-group">
+          <div class="form-group compact-group" id="timeRangeGroup">
             <label class="form-label">가능 시간대 범위 (00:00 ~ 24:00 전체 지원)</label>
             <div class="time-range-row">
               <div style="flex: 1;">
@@ -122,6 +122,15 @@
   <div id="toast" class="toast-notice"></div>
 
   <script>
+    // 모바일 기기 감지
+    function checkMobileDevice() {
+      const isMobile = window.innerWidth <= 900 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      document.documentElement.classList.toggle('is-mobile-device', isMobile);
+      document.body.classList.toggle('is-mobile-device', isMobile);
+    }
+    checkMobileDevice();
+    window.addEventListener('resize', checkMobileDevice);
+
     const SERVER_LOCAL_IP = "{{ local_ip }}";
     const selectedDates = new Set();
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];

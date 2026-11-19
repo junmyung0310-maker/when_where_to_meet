@@ -8,6 +8,13 @@ let isMouseDown = false;
 let currentDragAction = 'add'; // 'add' or 'remove'
 let activeMode = 'auto'; // 'auto', 'add', 'remove'
 
+// 모바일 UI 전용 상태
+let isMobile = false;
+let mobileActiveWhenSubtab = 'my'; // 'my' | 'group'
+let mobileActiveWhereSubtab = 'inputs'; // 'inputs' | 'results'
+let mobileTouchMode = 'scroll'; // 'scroll' | 'drag'
+let selectedInspectSlot = null;
+
 // 전역 상태 (Where to Meet)
 let kakaoMap = null;
 let mapMarkers = [];
@@ -17,6 +24,67 @@ let selectedCandidateStation = null;
 let currentPurpose = 'study';
 
 const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 모바일 기기 감지 및 뷰 동기화
+function checkMobileDevice() {
+  isMobile = window.innerWidth <= 900 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  document.documentElement.classList.toggle('is-mobile-device', isMobile);
+  document.body.classList.toggle('is-mobile-device', isMobile);
+  syncMobileViews();
+}
+
+function syncMobileViews() {
+  const leftPanel = document.getElementById('whenLeftPanel');
+  const rightPanel = document.getElementById('whenRightPanel');
+  const btnSubMy = document.getElementById('btnSubtabMy');
+  const btnSubGroup = document.getElementById('btnSubtabGroup');
+
+  if (isMobile) {
+    if (leftPanel && rightPanel) {
+      if (mobileActiveWhenSubtab === 'my') {
+        leftPanel.style.display = 'flex';
+        rightPanel.style.display = 'none';
+        if (btnSubMy) btnSubMy.classList.add('active');
+        if (btnSubGroup) btnSubGroup.classList.remove('active');
+      } else {
+        leftPanel.style.display = 'none';
+        rightPanel.style.display = 'flex';
+        if (btnSubMy) btnSubMy.classList.remove('active');
+        if (btnSubGroup) btnSubGroup.classList.add('active');
+      }
+    }
+
+    const whereLeft = document.getElementById('whereLeftPanel');
+    const whereRight = document.getElementById('whereRightPanel');
+    const btnWhereInput = document.getElementById('btnWhereSubInput');
+    const btnWhereResult = document.getElementById('btnWhereSubResult');
+
+    if (whereLeft && whereRight) {
+      if (mobileActiveWhereSubtab === 'inputs') {
+        whereLeft.style.display = 'block';
+        whereRight.style.display = 'none';
+        if (btnWhereInput) btnWhereInput.classList.add('active');
+        if (btnWhereResult) btnWhereResult.classList.remove('active');
+      } else {
+        whereLeft.style.display = 'none';
+        whereRight.style.display = 'block';
+        if (btnWhereInput) btnWhereInput.classList.remove('active');
+        if (btnWhereResult) btnWhereResult.classList.add('active');
+        if (kakaoMap) {
+          setTimeout(() => { kakaoMap.relayout(); }, 100);
+        }
+      }
+    }
+  } else {
+    // 데스크탑 화면: CSS 미디어 쿼리가 정상 작동하도록 인라인 display 제거
+    if (leftPanel) leftPanel.style.display = '';
+    if (rightPanel) rightPanel.style.display = '';
+    const whereLeft = document.getElementById('whereLeftPanel');
+    const whereRight = document.getElementById('whereRightPanel');
+    if (whereLeft) whereLeft.style.display = '';
+    if (whereRight) whereRight.style.display = '';
+  }
+}
 
 // HTML 안전 이스케이프 유틸리티
 function escapeHtml(str) {
@@ -53,8 +121,12 @@ function formatDisplayDate(dateStr) {
 
 // 초기 로드
 document.addEventListener('DOMContentLoaded', async () => {
+  checkMobileDevice();
+  window.addEventListener('resize', checkMobileDevice);
+
   setupTabs();
   setupToolbar();
+  setupMobileUI();
   setupShareModal();
   setupWhereTab();
   setupSynchronizedScroll();
@@ -226,6 +298,142 @@ function setupToolbar() {
   });
 }
 
+// 모바일 전용 인터랙션 및 UI 설정
+function setupMobileUI() {
+  const btnSubMy = document.getElementById('btnSubtabMy');
+  const btnSubGroup = document.getElementById('btnSubtabGroup');
+
+  if (btnSubMy) {
+    btnSubMy.addEventListener('click', () => {
+      mobileActiveWhenSubtab = 'my';
+      syncMobileViews();
+    });
+  }
+
+  if (btnSubGroup) {
+    btnSubGroup.addEventListener('click', () => {
+      mobileActiveWhenSubtab = 'group';
+      syncMobileViews();
+    });
+  }
+
+  const btnWhereInput = document.getElementById('btnWhereSubInput');
+  const btnWhereResult = document.getElementById('btnWhereSubResult');
+
+  if (btnWhereInput) {
+    btnWhereInput.addEventListener('click', () => {
+      mobileActiveWhereSubtab = 'inputs';
+      syncMobileViews();
+    });
+  }
+
+  if (btnWhereResult) {
+    btnWhereResult.addEventListener('click', () => {
+      mobileActiveWhereSubtab = 'results';
+      syncMobileViews();
+    });
+  }
+
+  // 모바일 퀵 셀렉트 버튼
+  const btnMorning = document.getElementById('btnQuickMorning');
+  const btnAfternoon = document.getElementById('btnQuickAfternoon');
+  const btnEvening = document.getElementById('btnQuickEvening');
+  const btnQuickAll = document.getElementById('btnQuickAll');
+  const btnQuickClear = document.getElementById('btnQuickClear');
+
+  function applyQuickPreset(type) {
+    if (!currentRoom) return;
+    const action = activeMode === 'remove' ? 'remove' : 'add';
+
+    currentRoom.dates.forEach(d => {
+      currentRoom.time_slots.forEach(t => {
+        const slotKey = `${d}_${t}`;
+        const hour = parseInt(t.split(':')[0], 10);
+        let match = false;
+
+        if (type === 'morning') match = (hour < 12);
+        else if (type === 'afternoon') match = (hour >= 12 && hour < 18);
+        else if (type === 'evening') match = (hour >= 18);
+        else if (type === 'all') match = true;
+        else if (type === 'clear') match = true;
+
+        if (match) {
+          if (type === 'clear' || action === 'remove') {
+            mySelectedSlots.delete(slotKey);
+          } else {
+            mySelectedSlots.add(slotKey);
+          }
+        }
+      });
+    });
+
+    renderMySchedule();
+    const labelMap = {
+      morning: '오전 시간대',
+      afternoon: '오후 시간대',
+      evening: '저녁 시간대',
+      all: '전체 시간대',
+      clear: '전체'
+    };
+    showToast(type === 'clear' ? '전체 일정이 해제되었습니다.' : `${labelMap[type]}가 적용되었습니다.`);
+  }
+
+  if (btnMorning) btnMorning.addEventListener('click', () => applyQuickPreset('morning'));
+  if (btnAfternoon) btnAfternoon.addEventListener('click', () => applyQuickPreset('afternoon'));
+  if (btnEvening) btnEvening.addEventListener('click', () => applyQuickPreset('evening'));
+  if (btnQuickAll) btnQuickAll.addEventListener('click', () => applyQuickPreset('all'));
+  if (btnQuickClear) btnQuickClear.addEventListener('click', () => applyQuickPreset('clear'));
+
+  // 모바일 터치 모드 토글 (탭/스크롤 vs 드래그 칠하기)
+  const btnScrollMode = document.getElementById('btnTouchScrollMode');
+  const btnDragMode = document.getElementById('btnTouchDragMode');
+
+  function setTouchMode(mode) {
+    mobileTouchMode = mode;
+    if (btnScrollMode && btnDragMode) {
+      if (mode === 'scroll') {
+        btnScrollMode.classList.add('active');
+        btnDragMode.classList.remove('active');
+        showToast('👆 탭/스크롤 모드: 칸 탭 시 선택, 편안한 스크롤 가능');
+      } else {
+        btnScrollMode.classList.remove('active');
+        btnDragMode.classList.add('active');
+        showToast('✏️ 드래그 칠하기 모드: 문질러서 연속으로 칸 채우기');
+      }
+    }
+  }
+
+  if (btnScrollMode) btnScrollMode.addEventListener('click', () => setTouchMode('scroll'));
+  if (btnDragMode) btnDragMode.addEventListener('click', () => setTouchMode('drag'));
+
+  // 모바일 종합 시간표 터치 상세 인스펙터 닫기 & 내 일정 이동
+  const mtiCloseBtn = document.getElementById('mtiCloseBtn');
+  if (mtiCloseBtn) {
+    mtiCloseBtn.addEventListener('click', () => {
+      closeMobileTouchInspector();
+    });
+  }
+
+  const btnMtiGo = document.getElementById('btnMtiGoMySchedule');
+  if (btnMtiGo) {
+    btnMtiGo.addEventListener('click', () => {
+      mobileActiveWhenSubtab = 'my';
+      syncMobileViews();
+      showToast('✍️ 내 가능 시간을 입력해주세요.');
+    });
+  }
+}
+
+function closeMobileTouchInspector() {
+  const inspector = document.getElementById('mobileTouchInspector');
+  if (inspector) inspector.style.display = 'none';
+  if (selectedInspectSlot) {
+    const prevCell = document.querySelector(`[data-slot="${selectedInspectSlot}"]`);
+    if (prevCell) prevCell.classList.remove('selected-inspect-cell');
+    selectedInspectSlot = null;
+  }
+}
+
 // 공유 링크 모달 설정
 function setupShareModal() {
   const modal = document.getElementById('shareModal');
@@ -337,6 +545,8 @@ function updateHeaderInfo() {
   const pCount = Object.keys(currentRoom.participants || {}).length;
   document.getElementById('headerParticipantCount').textContent = `👥 참여자: ${pCount}명`;
   document.getElementById('groupParticipantBadge').textContent = `${pCount}명 참여 중`;
+  const mobileBadge = document.getElementById('mobileGroupCountBadge');
+  if (mobileBadge) mobileBadge.textContent = `${pCount}명`;
 }
 
 // 내 일정 테이블 렌더링
@@ -421,30 +631,62 @@ function applySlotAction(td, slotKey, action) {
 }
 
 function setupTouchDrag(table) {
-  table.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (targetEl && targetEl.classList.contains('slot-cell') && targetEl.closest('#myScheduleTable')) {
-      const slotKey = targetEl.dataset.slot;
-      if (slotKey) {
-        applySlotAction(targetEl, slotKey, currentDragAction);
-      }
-    }
-  }, { passive: false });
+  let touchStartPos = { x: 0, y: 0 };
+  let touchMoved = false;
 
   table.addEventListener('touchstart', (e) => {
     const touch = e.touches[0];
-    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (targetEl && targetEl.classList.contains('slot-cell') && targetEl.closest('#myScheduleTable')) {
-      const slotKey = targetEl.dataset.slot;
-      if (slotKey) {
-        if (activeMode === 'auto') {
-          currentDragAction = mySelectedSlots.has(slotKey) ? 'remove' : 'add';
-        } else {
-          currentDragAction = activeMode;
+    touchStartPos = { x: touch.clientX, y: touch.clientY };
+    touchMoved = false;
+
+    if (mobileTouchMode === 'drag') {
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (targetEl && targetEl.classList.contains('slot-cell') && targetEl.closest('#myScheduleTable')) {
+        const slotKey = targetEl.dataset.slot;
+        if (slotKey) {
+          if (activeMode === 'auto') {
+            currentDragAction = mySelectedSlots.has(slotKey) ? 'remove' : 'add';
+          } else {
+            currentDragAction = activeMode;
+          }
+          applySlotAction(targetEl, slotKey, currentDragAction);
         }
-        applySlotAction(targetEl, slotKey, currentDragAction);
+      }
+    }
+  }, { passive: true });
+
+  table.addEventListener('touchmove', (e) => {
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPos.x);
+    const dy = Math.abs(touch.clientY - touchStartPos.y);
+    if (dx > 8 || dy > 8) {
+      touchMoved = true;
+    }
+
+    if (mobileTouchMode === 'drag') {
+      e.preventDefault();
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (targetEl && targetEl.classList.contains('slot-cell') && targetEl.closest('#myScheduleTable')) {
+        const slotKey = targetEl.dataset.slot;
+        if (slotKey) {
+          applySlotAction(targetEl, slotKey, currentDragAction);
+        }
+      }
+    }
+    // scroll 모드에서는 기본 브라우저 스크롤을 방해하지 않음
+  }, { passive: false });
+
+  table.addEventListener('touchend', () => {
+    if (mobileTouchMode === 'scroll' && !touchMoved) {
+      const targetEl = document.elementFromPoint(touchStartPos.x, touchStartPos.y);
+      if (targetEl && targetEl.classList.contains('slot-cell') && targetEl.closest('#myScheduleTable')) {
+        const slotKey = targetEl.dataset.slot;
+        if (slotKey) {
+          const action = activeMode === 'auto'
+            ? (mySelectedSlots.has(slotKey) ? 'remove' : 'add')
+            : activeMode;
+          applySlotAction(targetEl, slotKey, action);
+        }
       }
     }
   });
@@ -506,12 +748,18 @@ function renderGroupSchedule() {
         }
       }
 
+      // 데스크탑 마우스 호버 안내
       td.addEventListener('mouseenter', () => {
         showHoverDetails(d, t, stat);
       });
 
       td.addEventListener('mouseleave', () => {
         resetHoverDetails();
+      });
+
+      // 모바일 & 데스크탑 클릭/터치 인스펙터
+      td.addEventListener('click', () => {
+        showMobileTouchInspector(d, t, stat, td);
       });
 
       tr.appendChild(td);
@@ -521,6 +769,54 @@ function renderGroupSchedule() {
   });
 
   table.appendChild(tbody);
+}
+
+// 모바일 종합 시간표 터치 상세 인스펙터 바텀 카드 표시
+function showMobileTouchInspector(date, time, stat, tdEl) {
+  selectedInspectSlot = `${date}_${time}`;
+  document.querySelectorAll('#groupScheduleTable .slot-cell').forEach(c => c.classList.remove('selected-inspect-cell'));
+  if (tdEl) tdEl.classList.add('selected-inspect-cell');
+
+  const inspector = document.getElementById('mobileTouchInspector');
+  if (!inspector) return;
+  inspector.style.display = 'block';
+
+  const info = formatDisplayDate(date);
+  const total = currentSummary ? currentSummary.total_participants : 0;
+  const count = stat ? stat.count : 0;
+
+  const titleEl = document.getElementById('mtiTitle');
+  if (titleEl) {
+    titleEl.innerHTML = `<strong>${info.monthDay} ${info.dayName} ${time}</strong> <span style="color: #2563eb;">(${count}/${total}명 가능)</span>`;
+  }
+
+  const availCountEl = document.getElementById('mtiAvailCount');
+  if (availCountEl) availCountEl.textContent = count;
+
+  const availUsersEl = document.getElementById('mtiAvailUsers');
+  if (availUsersEl) {
+    if (stat && stat.available_users && stat.available_users.length > 0) {
+      availUsersEl.textContent = stat.available_users.join(', ');
+    } else {
+      availUsersEl.textContent = '없음';
+    }
+  }
+
+  const unavailCountEl = document.getElementById('mtiUnavailCount');
+  const unavailUsers = (stat && stat.unavailable_users) ? stat.unavailable_users : [];
+  if (unavailCountEl) unavailCountEl.textContent = unavailUsers.length;
+
+  const unavailUsersEl = document.getElementById('mtiUnavailUsers');
+  if (unavailUsersEl) {
+    if (unavailUsers.length > 0) {
+      unavailUsersEl.textContent = unavailUsers.join(', ');
+    } else {
+      unavailUsersEl.textContent = '전원 참석 가능! 🎉';
+    }
+  }
+
+  // 상단 데스크탑 호버 정보도 함께 동기화
+  showHoverDetails(date, time, stat);
 }
 
 function showHoverDetails(date, time, stat) {
@@ -677,6 +973,22 @@ function renderTopRecommendations() {
       clearHighlights();
     });
 
+    // 모바일/데스크탑 클릭 시 종합 시간표 해당 시간대로 스크롤 및 인스펙터 활성화
+    card.addEventListener('click', () => {
+      if (isMobile) {
+        mobileActiveWhenSubtab = 'group';
+        syncMobileViews();
+      }
+      highlightTimeRange(rec.date, rec.start_time, rec.end_time);
+      const targetSlot = `${rec.date}_${rec.start_time}`;
+      const targetEl = document.querySelector(`#groupScheduleTable [data-slot="${targetSlot}"]`);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        const stat = (currentSummary && currentSummary.slot_stats) ? currentSummary.slot_stats[targetSlot] : null;
+        showMobileTouchInspector(rec.date, rec.start_time, stat, targetEl);
+      }
+    });
+
     container.appendChild(card);
   });
 }
@@ -829,6 +1141,12 @@ async function saveMySchedule() {
       renderParticipantChips();
       renderRequiredCheckboxes();
       syncWhereParticipants();
+
+      if (isMobile) {
+        mobileActiveWhenSubtab = 'group';
+        syncMobileViews();
+        showToast('일정 저장 완료! 👥 모임 종합 시간표로 이동했습니다.');
+      }
     } else {
       showToast('저장 실패: ' + (data.detail || ''));
     }
@@ -969,6 +1287,11 @@ async function runWhereCalculation() {
       renderMapMarkers(data.origins || [], data.candidates || [], selectedCandidateStation);
       showToast(`🎯 최적 중간 장소 1위 '${selectedCandidateStation.name}' 계산 완료!`);
       if (statusText) statusText.textContent = `1위: ${selectedCandidateStation.name}`;
+
+      if (isMobile) {
+        mobileActiveWhereSubtab = 'results';
+        syncMobileViews();
+      }
     } else {
       const warnMsg = (data.warnings && data.warnings.length > 0) 
         ? data.warnings[0] 
