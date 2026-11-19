@@ -2083,44 +2083,763 @@ body.room-page {
   background: #d97706;
 }
 
-/* 4. 반응형 모바일 (화면 너비 900px 미만 대응) */
+/* ==========================================================
+   4. 반응형 모바일 UI 시스템 (900px 이하 및 모바일 기기 완벽 대응)
+   - 데스크탑 화면(901px 이상)은 전혀 영향을 받지 않도록 독립 설계
+   ========================================================== */
+
+/* 데스크탑 기본: 모바일 전용 엘리먼트 완전 숨김 */
+@media (min-width: 901px) {
+  .mobile-subtab-bar,
+  .mobile-quick-toolbar,
+  .mobile-touch-mode-bar,
+  .mobile-touch-inspector {
+    display: none !important;
+  }
+}
+
+/* 모바일 전용 반응형 레이아웃 (@media max-width: 900px 또는 .is-mobile-device) */
 @media (max-width: 900px) {
+  /* 1. 기본 뷰포트 & 공통 */
+  html, body {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body.index-page,
   body.room-page {
     height: auto !important;
+    min-height: 100vh !important;
     max-height: none !important;
-    overflow: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    background: #f8fafc;
   }
-  .create-room-form-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .when-grid-layout {
-    grid-template-columns: 1fr !important;
-    overflow: visible !important;
-  }
-  .schedule-container {
-    max-height: 420px;
-  }
-  .room-compact-bar {
-    height: auto !important;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 6px 12px;
-    gap: 4px;
-  }
-  .mode-switch-btn {
-    padding: 3px 10px;
-  }
-  .mode-switch-btn .switch-sub-label {
-    display: none;
-  }
-  .mode-switch-btn .switch-main-label {
-    font-size: 0.74rem;
-  }
+
   .room-main-viewport,
   .when-tab-wrapper,
   .where-tab-wrapper,
   .index-main-wrap {
     overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* 2. 상단 네비게이션 헤더 모바일 최적화 */
+  .compact-nav {
+    height: auto !important;
+    padding: 8px 12px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+  }
+
+  .nav-brand {
+    font-size: 0.95rem !important;
+  }
+
+  .brand-icon {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .nav-badge {
+    display: none !important;
+  }
+
+  /* 서비스 주소 pill 모바일 축소 */
+  .network-share-pill {
+    font-size: 0.7rem !important;
+    padding: 3px 8px !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* 상단 모드 스위처 (When / Where) 모바일 풀 너비 2열 배치 */
+  .mode-switch-wrapper {
+    order: 3;
+    width: 100% !important;
+    margin: 2px 0 0 0 !important;
+  }
+
+  .mode-switch-container {
+    width: 100% !important;
+    height: 36px !important;
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 2px !important;
+  }
+
+  .mode-switch-btn {
+    flex: 1 !important;
+    height: 100% !important;
+    padding: 0 4px !important;
+    font-size: 0.8rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  .mode-switch-btn .switch-sub-label {
+    display: none !important;
+  }
+
+  .mode-switch-btn .switch-main-label {
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+  }
+
+  .mode-switch-btn .switch-icon {
+    font-size: 0.9rem !important;
+  }
+
+  /* 모임 메타 서브헤더 모바일 컴팩트 칩 바 */
+  .room-compact-bar {
+    height: auto !important;
+    padding: 6px 12px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+  }
+
+  .room-title-chunk {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .room-title-text {
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 75% !important;
+  }
+
+  .room-id-badge {
+    font-size: 0.7rem !important;
+    padding: 1px 6px !important;
+  }
+
+  .room-meta-chunk {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    font-size: 0.72rem !important;
+    color: #64748b !important;
+  }
+
+  .room-meta-chunk > span {
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .meta-participants-badge {
+    color: #2563eb !important;
+    font-weight: 700 !important;
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+  }
+
+  /* 3. 모바일 전용 서브 탭 바 (내 일정 vs 모임 종합 / 목적 출발지 vs 추천 결과) */
+  .mobile-subtab-bar {
+    display: flex !important;
+    gap: 6px !important;
+    padding: 6px 12px !important;
+    background: #f8fafc !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 40 !important;
+  }
+
+  .mobile-subtab-btn {
+    flex: 1 !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #475569 !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+
+  .mobile-subtab-btn.active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 6px rgba(37,99,235,0.25) !important;
+  }
+
+  .mobile-subtab-badge {
+    background: rgba(255,255,255,0.3) !important;
+    color: inherit !important;
+    padding: 1px 6px !important;
+    border-radius: 10px !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+  }
+
+  .mobile-subtab-btn:not(.active) .mobile-subtab-badge {
+    background: #e2e8f0 !important;
+    color: #475569 !important;
+  }
+
+  /* 4. AI 최적 추천 TOP 3 배너 (모바일 가로 스와이프 카드) */
+  .top-recommendation-bar.compact-rec-bar {
+    padding: 6px 12px !important;
+    background: #eff6ff !important;
+    border-bottom: 1px solid #dbeafe !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+
+  .top-rec-header-slim {
+    width: 100% !important;
+  }
+
+  .top-rec-title-mini {
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    color: #1d4ed8 !important;
+  }
+
+  .rec-cards-grid-slim {
+    display: flex !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-snap-type: x mandatory !important;
+    padding-bottom: 4px !important;
+  }
+
+  .rec-card-compact {
+    flex: 0 0 auto !important;
+    scroll-snap-align: start !important;
+    min-width: 200px !important;
+    max-width: 240px !important;
+    padding: 6px 10px !important;
+    background: #ffffff !important;
+    border: 1px solid #bfdbfe !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(37,99,235,0.08) !important;
+    cursor: pointer !important;
+  }
+
+  .rec-card-compact:active {
+    transform: scale(0.98);
+  }
+
+  .rec-time-compact {
+    font-size: 0.78rem !important;
+  }
+
+  .rec-members-tag-compact {
+    font-size: 0.7rem !important;
+  }
+
+  /* 5. When to Meet 메인 레이아웃 및 시간표 */
+  .when-grid-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 8px 10px !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+
+  .schedule-panel-card {
+    border-radius: 12px !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  /* 모바일 서브탭 제어에 따른 패널 표시/숨김 */
+  .schedule-panel-card.left-panel,
+  .schedule-panel-card.right-panel {
+    width: 100% !important;
+  }
+
+  .schedule-container {
+    height: 380px !important;
+    max-height: 55vh !important;
+    min-height: 300px !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+    border: 1px solid #e2e8f0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* 모바일 시간표 테이블 */
+  .schedule-table {
+    border-spacing: 2px !important;
+    width: max-content !important;
+    min-width: 100% !important;
+  }
+
+  /* 날짜 헤더 (Sticky Top) */
+  .schedule-table thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 20 !important;
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+    padding: 6px 4px !important;
+    font-size: 0.74rem !important;
+    min-width: 50px !important;
+  }
+
+  /* 좌상단 코너 '시간' 헤더 (Sticky Top + Left) */
+  .schedule-table thead th:first-child {
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 30 !important;
+    background: #cbd5e1 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    font-weight: 700 !important;
+  }
+
+  /* 시간 라벨 열 (Sticky Left) */
+  .schedule-table td.time-label {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 15 !important;
+    background: #f8fafc !important;
+    color: #475569 !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    text-align: center !important;
+    padding: 0 2px !important;
+    border-right: 1px solid #e2e8f0 !important;
+  }
+
+  /* 시간표 슬롯 셀 (손가락 터치에 넉넉한 28px 높이) */
+  .slot-cell {
+    height: 28px !important;
+    min-height: 28px !important;
+    min-width: 50px !important;
+    border-radius: 3px !important;
+    background-color: #f1f5f9 !important;
+  }
+
+  .slot-cell.my-selected {
+    background-color: #3b82f6 !important;
+  }
+
+  .slot-cell.selected-inspect-cell {
+    outline: 2px solid #2563eb !important;
+    outline-offset: -1px !important;
+    z-index: 10 !important;
+    position: relative !important;
+  }
+
+  /* 6. 모바일 퀵 도구 툴바 */
+  .mobile-quick-toolbar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 8px !important;
+    margin-bottom: 6px !important;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .mobile-quick-title {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    color: #334155 !important;
+    white-space: nowrap !important;
+  }
+
+  .mobile-quick-btns {
+    display: flex !important;
+    gap: 4px !important;
+  }
+
+  .mobile-quick-btns .btn {
+    padding: 2px 7px !important;
+    font-size: 0.72rem !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+
+  .mobile-quick-btns .btn:active {
+    background: #e2e8f0 !important;
+  }
+
+  /* 모바일 터치 모드 조작 바 (스크롤 vs 드래그) */
+  .mobile-touch-mode-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 4px 8px !important;
+    margin-bottom: 6px !important;
+    background: #f1f5f9 !important;
+    border-radius: 6px !important;
+  }
+
+  .touch-mode-hint {
+    font-size: 0.7rem !important;
+    color: #64748b !important;
+  }
+
+  .touch-mode-pill {
+    display: flex !important;
+    background: #e2e8f0 !important;
+    padding: 2px !important;
+    border-radius: 12px !important;
+    gap: 2px !important;
+  }
+
+  .touch-mode-item {
+    border: none !important;
+    background: transparent !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+    padding: 2px 8px !important;
+    border-radius: 10px !important;
+    cursor: pointer !important;
+  }
+
+  .touch-mode-item.active {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+    font-weight: 700 !important;
+  }
+
+  /* 내 일정 저장 버튼 모바일 시원한 높이 */
+  .schedule-panel-footer {
+    margin-top: 8px !important;
+  }
+
+  .btn-block-compact {
+    height: 42px !important;
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 3px 10px rgba(37,99,235,0.25) !important;
+  }
+
+  /* 7. 모바일 종합 시간표 터치 상세 인스펙터 (슬라이드업 바텀 카드) */
+  .mobile-touch-inspector {
+    display: none;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    background: #ffffff !important;
+    border-top: 2px solid #2563eb !important;
+    border-radius: 16px 16px 0 0 !important;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
+    padding: 12px 16px !important;
+    animation: mtiSlideUp 0.25s ease-out !important;
+  }
+
+  @keyframes mtiSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .mti-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 8px !important;
+  }
+
+  .mti-title {
+    font-size: 0.92rem !important;
+    color: #0f172a !important;
+  }
+
+  .mti-close-btn {
+    background: none !important;
+    border: none !important;
+    font-size: 1.2rem !important;
+    color: #64748b !important;
+    cursor: pointer !important;
+    padding: 0 6px !important;
+  }
+
+  .mti-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    font-size: 0.8rem !important;
+    margin-bottom: 10px !important;
+  }
+
+  .mti-stat-row {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .mti-badge {
+    padding: 2px 8px !important;
+    border-radius: 12px !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  .mti-badge.avail-badge {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+  }
+
+  .mti-badge.unavail-badge {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+  }
+
+  .mti-users-text {
+    color: #334155 !important;
+    font-weight: 500 !important;
+    word-break: break-all !important;
+  }
+
+  .mti-footer {
+    display: flex !important;
+    justify-content: flex-end !important;
+  }
+
+  .mti-footer .btn {
+    width: 100% !important;
+    height: 36px !important;
+    font-size: 0.84rem !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+  }
+
+  /* 8. Where to Meet 모바일 레이아웃 최적화 */
+  .where-banner-compact {
+    padding: 10px 12px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .where-banner-title {
+    font-size: 0.95rem !important;
+  }
+
+  .where-banner-sub {
+    font-size: 0.75rem !important;
+    margin-top: 2px !important;
+  }
+
+  #btnRunWhereCalc {
+    width: 100% !important;
+    height: 38px !important;
+    font-size: 0.88rem !important;
+  }
+
+  .where-grid-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 8px 10px !important;
+    gap: 10px !important;
+  }
+
+  .where-side-card,
+  .where-main-card {
+    border-radius: 12px !important;
+    padding: 12px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+    border: 1px solid #e2e8f0 !important;
+    max-height: none !important;
+  }
+
+  /* 모임 목적 2x2 카드 그리드 */
+  .purpose-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .purpose-card {
+    padding: 8px !important;
+    border-radius: 8px !important;
+  }
+
+  .purpose-icon {
+    font-size: 1.3rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .purpose-name {
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+  }
+
+  .purpose-desc {
+    font-size: 0.68rem !important;
+  }
+
+  /* 카카오 지도 모바일 240px */
+  #kakaoMap {
+    height: 240px !important;
+  }
+
+  /* 9. index.html 메인 생성 화면 모바일 최적화 */
+  .index-main-wrap {
+    padding: 10px !important;
+  }
+
+  .create-room-split-card {
+    border-radius: 16px !important;
+    padding: 16px 14px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  .create-room-form-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .index-left-col {
+    display: contents !important;
+  }
+
+  .index-hero-mini {
+    order: 1 !important;
+    margin-bottom: 8px !important;
+  }
+
+  .index-main-title {
+    font-size: 1.25rem !important;
+    font-weight: 800 !important;
+  }
+
+  .index-main-desc {
+    font-size: 0.8rem !important;
+    color: #64748b !important;
+  }
+
+  #roomTitleGroup {
+    order: 2 !important;
+  }
+
+  .index-right-col {
+    order: 3 !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+  }
+
+  #timeRangeGroup {
+    order: 4 !important;
+  }
+
+  #customIdGroup {
+    order: 5 !important;
+  }
+
+  .create-room-submit-btn {
+    order: 6 !important;
+    height: 48px !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.35) !important;
+    margin-top: 6px !important;
+  }
+
+  #recentRoomsSection {
+    order: 7 !important;
+    margin-top: 8px !important;
+  }
+  .dates-selector-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  .date-pick-btn {
+    min-height: 48px !important;
+    padding: 6px 2px !important;
+    border-radius: 8px !important;
+    font-size: 0.78rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .date-pick-btn .day-name {
+    font-size: 0.68rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .date-pick-btn.selected {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 2px 6px rgba(37,99,235,0.3) !important;
+  }
+
+  .date-presets-row {
+    display: flex !important;
+    gap: 4px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .date-presets-row .btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 4px 10px !important;
+    font-size: 0.75rem !important;
+    border-radius: 14px !important;
+  }
+
+  .create-room-submit-btn {
+    height: 46px !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.35) !important;
+    margin-top: 6px !important;
   }
 }

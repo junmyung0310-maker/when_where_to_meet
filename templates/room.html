@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>{{ room.title }} - When2Meet & Where2Meet</title>
   <link rel="stylesheet" href="/static/css/style.css">
   {% if kakao_js_key %}
@@ -104,11 +104,22 @@
         </div>
       </section>
 
+      <!-- 모바일 전용 서브 탭 바 (내 일정 입력 vs 모임 종합 보기) -->
+      <div class="mobile-subtab-bar" id="mobileWhenSubTabBar">
+        <button type="button" class="mobile-subtab-btn active" id="btnSubtabMy" data-target="my">
+          <span class="subtab-icon">✍️</span> 내 일정 입력
+        </button>
+        <button type="button" class="mobile-subtab-btn" id="btnSubtabGroup" data-target="group">
+          <span class="subtab-icon">👥</span> 모임 종합 보기
+          <span class="mobile-subtab-badge" id="mobileGroupCountBadge">0명</span>
+        </button>
+      </div>
+
       <!-- 좌우 2열 메인 시간표 영역 -->
       <div class="when-grid-layout">
         
         <!-- 좌측 패널: 내 시간표 패널 -->
-        <div class="card schedule-panel-card left-panel">
+        <div class="card schedule-panel-card left-panel" id="whenLeftPanel">
           
           <!-- 패널 헤더: 타이틀 + 모드 툴바 -->
           <div class="panel-header compact-header">
@@ -143,6 +154,31 @@
             </button>
           </div>
 
+          <!-- 모바일 전용 퀵 툴바 (오전/오후/저녁/전체 1초 선택) -->
+          <div class="mobile-quick-toolbar" id="mobileQuickToolbar">
+            <span class="mobile-quick-title">⚡ 빠른 선택:</span>
+            <div class="mobile-quick-btns">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnQuickMorning">오전</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnQuickAfternoon">오후</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnQuickEvening">저녁</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnQuickAll">전체</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnQuickClear">해제</button>
+            </div>
+          </div>
+
+          <!-- 모바일 터치 조작 모드 (스크롤 우선 vs 드래그 칠하기) -->
+          <div class="mobile-touch-mode-bar" id="mobileTouchModeBar">
+            <span class="touch-mode-hint">💡 칸 탭: 선택/해제</span>
+            <div class="touch-mode-pill">
+              <button type="button" class="touch-mode-item active" id="btnTouchScrollMode" data-touch-mode="scroll">
+                👆 탭/스크롤
+              </button>
+              <button type="button" class="touch-mode-item" id="btnTouchDragMode" data-touch-mode="drag">
+                ✏️ 드래그 칠하기
+              </button>
+            </div>
+          </div>
+
           <!-- 내 드래그 시간표 테이블 (자체 스크롤 + Sticky 헤더) -->
           <div class="schedule-container" id="myScheduleWrapper">
             <table class="schedule-table" id="myScheduleTable">
@@ -159,7 +195,7 @@
         </div>
 
         <!-- 우측 패널: 모임 종합 시간표 패널 -->
-        <div class="card schedule-panel-card right-panel">
+        <div class="card schedule-panel-card right-panel" id="whenRightPanel">
           
           <!-- 패널 헤더: 타이틀 + 참여자 수 + 히트맵 범례 -->
           <div class="panel-header compact-header">
@@ -190,6 +226,29 @@
             <table class="schedule-table" id="groupScheduleTable">
               <!-- JS 동적 렌더링 -->
             </table>
+          </div>
+
+          <!-- 모바일 종합 시간표 터치 상세 인스펙터 바텀 카드 -->
+          <div class="mobile-touch-inspector" id="mobileTouchInspector" style="display: none;">
+            <div class="mti-header">
+              <div class="mti-title" id="mtiTitle">시간을 터치해보세요</div>
+              <button type="button" class="mti-close-btn" id="mtiCloseBtn">✕</button>
+            </div>
+            <div class="mti-body">
+              <div class="mti-stat-row">
+                <span class="mti-badge avail-badge">🟢 가능 <strong id="mtiAvailCount">0</strong>명</span>
+                <span class="mti-users-text" id="mtiAvailUsers">-</span>
+              </div>
+              <div class="mti-stat-row">
+                <span class="mti-badge unavail-badge">🔴 불가 <strong id="mtiUnavailCount">0</strong>명</span>
+                <span class="mti-users-text" id="mtiUnavailUsers">-</span>
+              </div>
+            </div>
+            <div class="mti-footer">
+              <button type="button" class="btn btn-primary btn-xs" id="btnMtiGoMySchedule">
+                ✍️ 내 일정 입력하러 가기
+              </button>
+            </div>
           </div>
 
           <!-- 하단 정보 영역: 호버 실시간 안내 + VIP 및 참여자 명단 -->
@@ -258,9 +317,19 @@
       <!-- 안내 및 경고 메시지 배너 -->
       <div id="whereWarningsContainer" class="where-warnings-box" style="display: none;"></div>
 
+      <!-- 모바일 Where 전용 서브 탭 바 -->
+      <div class="mobile-subtab-bar" id="mobileWhereSubTabBar">
+        <button type="button" class="mobile-subtab-btn active" id="btnWhereSubInput" data-target="inputs">
+          ⚙️ 1. 목적 & 출발지 설정
+        </button>
+        <button type="button" class="mobile-subtab-btn" id="btnWhereSubResult" data-target="results">
+          🗺️ 2. 추천 결과 & 지도
+        </button>
+      </div>
+
       <div class="where-grid-layout">
         <!-- 좌측: 설정 및 후보 순위 패널 -->
-        <div class="card where-side-card" style="margin-bottom: 0; padding: 14px; overflow-y: auto;">
+        <div class="card where-side-card" id="whereLeftPanel" style="margin-bottom: 0; padding: 14px; overflow-y: auto;">
           <h3 class="where-section-title">
             1. 모임 목적 선택
           </h3>
@@ -323,7 +392,7 @@
         </div>
 
         <!-- 우측: 지도 및 상세 결과 패널 -->
-        <div class="card where-main-card" style="margin-bottom: 0; padding: 14px; overflow-y: auto;">
+        <div class="card where-main-card" id="whereRightPanel" style="margin-bottom: 0; padding: 14px; overflow-y: auto;">
           <div class="panel-header compact-header" style="margin-bottom: 8px;">
             <h3 class="panel-title-compact">
               <span>🗺️ 대중교통 중간 지점 지도</span>
